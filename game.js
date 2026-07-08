@@ -268,10 +268,22 @@ const state = {
   over: false,
   player: null,
   enemy: null,
+  mode: "cpu",
+  online: {
+    roomCode: "",
+    playerId: "",
+    slot: "",
+    initialized: false,
+    pendingActionId: "",
+    appliedRounds: new Set(),
+    pollTimer: null,
+  },
 };
 
 const ui = {
   roundNo: document.querySelector("#roundNo"),
+  playerSideLabel: document.querySelector("#playerSideLabel"),
+  enemySideLabel: document.querySelector("#enemySideLabel"),
   playerHero: document.querySelector("#playerHero"),
   enemyHero: document.querySelector("#enemyHero"),
   playerHeroName: document.querySelector("#playerHeroName"),
@@ -302,6 +314,11 @@ const ui = {
   battleLog: document.querySelector("#battleLog"),
   resetBtn: document.querySelector("#resetBtn"),
   clearLogBtn: document.querySelector("#clearLogBtn"),
+  cpuModeBtn: document.querySelector("#cpuModeBtn"),
+  createRoomBtn: document.querySelector("#createRoomBtn"),
+  roomCodeInput: document.querySelector("#roomCodeInput"),
+  joinRoomBtn: document.querySelector("#joinRoomBtn"),
+  roomStatus: document.querySelector("#roomStatus"),
 };
 
 function makeFighter(label, heroId) {
@@ -323,12 +340,26 @@ function makeFighter(label, heroId) {
 function resetGame() {
   state.round = 1;
   state.over = false;
+  state.mode = "cpu";
+  stopPolling();
+  state.online = {
+    roomCode: "",
+    playerId: "",
+    slot: "",
+    initialized: false,
+    pendingActionId: "",
+    appliedRounds: new Set(),
+    pollTimer: null,
+  };
   state.player = makeFighter("你", ui.playerHero.value);
   state.enemy = makeFighter("电脑", ui.enemyHero.value);
+  ui.playerSideLabel.textContent = "你";
+  ui.enemySideLabel.textContent = "电脑";
   ui.playerLast.textContent = "等待出手";
   ui.enemyLast.textContent = "等待出手";
   ui.battleLog.innerHTML = "";
   addLog(`开局：你 HP=${formatHearts(state.player.hp)}，XP=${state.player.xp}；电脑 HP=${formatHearts(state.enemy.hp)}，XP=${state.enemy.xp}。`);
+  updateRoomStatus("当前：人机对战");
   render();
 }
 
@@ -384,13 +415,23 @@ function render() {
   ui.enemyHpBar.style.width = `${percentage(enemy.hp, enemy.maxHp)}%`;
   ui.playerXpBar.style.width = `${percentage(Math.min(player.xp, BALANCE.xpMeterMax), BALANCE.xpMeterMax)}%`;
   ui.enemyXpBar.style.width = `${percentage(Math.min(enemy.xp, BALANCE.xpMeterMax), BALANCE.xpMeterMax)}%`;
+  ui.playerHero.disabled = state.mode === "online";
+  ui.enemyHero.disabled = state.mode === "online";
+  ui.cpuModeBtn.classList.toggle("active", state.mode === "cpu");
+  ui.createRoomBtn.classList.toggle("active", state.mode === "online" && state.online.slot === "p1");
+  ui.joinRoomBtn.classList.toggle("active", state.mode === "online" && state.online.slot === "p2");
 
   document.querySelectorAll("[data-action]").forEach((button) => {
     const action = getActionById(button.dataset.action, player);
     if (action) {
       button.innerHTML = `<strong>${action.name}</strong><span>${describeAction(action, player)}</span>`;
     }
-    button.disabled = !action || state.over || !canUseAction(player, action);
+    const waitingForOnlineOpponent = state.mode === "online" && !state.online.initialized;
+    button.disabled = !action
+      || state.over
+      || waitingForOnlineOpponent
+      || state.online.pendingActionId
+      || !canUseAction(player, action);
   });
 }
 
@@ -447,6 +488,10 @@ function playRound(playerActionId) {
   if (state.over) return;
   const playerAction = getActionById(playerActionId, state.player);
   if (!playerAction || !canUseAction(state.player, playerAction)) return;
+  if (state.mode === "online") {
+    submitOnlineAction(playerActionId);
+    return;
+  }
 
   const enemyAction = chooseEnemyAction();
   const report = resolveRound(playerAction, enemyAction);
@@ -590,9 +635,9 @@ function resolveRound(playerAction, enemyAction) {
 
   if (playerAction.kind === "attack" && enemyAction.kind === "attack") {
     if (playerAttack > enemyAttack) {
-      dealDamage(player, enemy, playerAction, `你用 ${playerAction.name} 对攻压过电脑 ${enemyAction.name}，电脑 HP -1。`, logs, damageNotes, ui.enemyCard);
+      dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 对攻压过${enemy.label} ${enemyAction.name}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
     } else if (enemyAttack > playerAttack) {
-      dealDamage(enemy, player, enemyAction, `电脑用 ${enemyAction.name} 对攻压过你的 ${playerAction.name}，你 HP -1。`, logs, damageNotes, ui.playerCard);
+      dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 对攻压过${player.label}的 ${playerAction.name}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
     } else {
       logs.push({ text: `双方对攻强度同为 ${playerAttack}，互相抵消。` });
     }
@@ -601,15 +646,15 @@ function resolveRound(playerAction, enemyAction) {
     const enemyHits = enemyAction.kind === "attack" && enemyAttack > playerDefense;
 
     if (playerHits) {
-      dealDamage(player, enemy, playerAction, `你用 ${playerAction.name} 击穿电脑防御 ${formatDefense(enemyDefense)}，电脑 HP -1。`, logs, damageNotes, ui.enemyCard);
+      dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 击穿${enemy.label}防御 ${formatDefense(enemyDefense)}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
     } else if (playerAction.kind === "attack") {
-      logs.push({ text: `你用 ${playerAction.name}，强度 ${playerAttack} 未超过电脑防御 ${formatDefense(enemyDefense)}。` });
+      logs.push({ text: `${player.label}用 ${playerAction.name}，强度 ${playerAttack} 未超过${enemy.label}防御 ${formatDefense(enemyDefense)}。` });
     }
 
     if (enemyHits) {
-      dealDamage(enemy, player, enemyAction, `电脑用 ${enemyAction.name} 击穿你的防御 ${formatDefense(playerDefense)}，你 HP -1。`, logs, damageNotes, ui.playerCard);
+      dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 击穿${player.label}防御 ${formatDefense(playerDefense)}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
     } else if (enemyAction.kind === "attack") {
-      logs.push({ text: `电脑用 ${enemyAction.name}，强度 ${enemyAttack} 未超过你的防御 ${formatDefense(playerDefense)}。` });
+      logs.push({ text: `${enemy.label}用 ${enemyAction.name}，强度 ${enemyAttack} 未超过${player.label}防御 ${formatDefense(playerDefense)}。` });
     }
   }
 
@@ -744,12 +789,230 @@ function flash(element) {
   });
 }
 
+async function createOnlineRoom() {
+  const heroId = ui.playerHero.value;
+  try {
+    const data = await apiRequest("/api/rooms", { heroId });
+    enterOnlineRoom(data);
+    state.player = makeFighter("你", heroId);
+    state.enemy = makeFighter("对手", "classic");
+    state.round = 1;
+    state.over = false;
+    state.online.initialized = false;
+    ui.playerLast.textContent = "等待出手";
+    ui.enemyLast.textContent = "等待对手加入";
+    ui.battleLog.innerHTML = "";
+    ui.playerSideLabel.textContent = "你";
+    ui.enemySideLabel.textContent = "对手";
+    addLog(`房间 ${data.code} 已创建，等待对手加入。`);
+    updateRoomStatus(`房间 ${data.code}：等待对手加入。把房间代码发给对方。`);
+    render();
+    startPolling();
+  } catch (error) {
+    updateRoomStatus(`创建失败：${error.message}`);
+  }
+}
+
+async function joinOnlineRoom() {
+  const code = normalizeRoomCode(ui.roomCodeInput.value);
+  if (!code) {
+    updateRoomStatus("请输入房间代码。");
+    return;
+  }
+
+  try {
+    const data = await apiRequest(`/api/rooms/${code}/join`, { heroId: ui.playerHero.value });
+    enterOnlineRoom(data);
+    updateRoomStatus(`已加入房间 ${data.code}，等待同步。`);
+    startPolling();
+    await pollRoom();
+  } catch (error) {
+    updateRoomStatus(`加入失败：${error.message}`);
+  }
+}
+
+function enterOnlineRoom(data) {
+  stopPolling();
+  state.mode = "online";
+  state.online.roomCode = data.code;
+  state.online.playerId = data.playerId;
+  state.online.slot = data.slot;
+  state.online.pendingActionId = "";
+  state.online.appliedRounds = new Set();
+  ui.roomCodeInput.value = data.code;
+}
+
+async function submitOnlineAction(actionId) {
+  if (!state.online.roomCode || state.online.pendingActionId) return;
+  try {
+    state.online.pendingActionId = actionId;
+    render();
+    await apiRequest(`/api/rooms/${state.online.roomCode}/action`, {
+      playerId: state.online.playerId,
+      round: state.round,
+      actionId,
+    });
+    updateRoomStatus(`房间 ${state.online.roomCode}：已提交，等待对手。`);
+    await pollRoom();
+  } catch (error) {
+    state.online.pendingActionId = "";
+    updateRoomStatus(`提交失败：${error.message}`);
+    render();
+  }
+}
+
+function startPolling() {
+  stopPolling();
+  state.online.pollTimer = window.setInterval(pollRoom, 1200);
+}
+
+function stopPolling() {
+  if (state.online?.pollTimer) {
+    window.clearInterval(state.online.pollTimer);
+    state.online.pollTimer = null;
+  }
+}
+
+async function pollRoom() {
+  if (state.mode !== "online" || !state.online.roomCode || !state.online.playerId) return;
+  try {
+    const room = await apiGet(`/api/rooms/${state.online.roomCode}?playerId=${state.online.playerId}`);
+    syncOnlineRoom(room);
+  } catch (error) {
+    updateRoomStatus(`同步失败：${error.message}`);
+  }
+}
+
+function syncOnlineRoom(room) {
+  if (!room.players.p2) {
+    updateRoomStatus(`房间 ${room.code}：等待对手加入。`);
+    return;
+  }
+
+  if (!state.online.initialized) {
+    startOnlineMatch(room);
+  }
+
+  const selfSubmitted = room.submitted[state.online.slot];
+  const opponentSlot = getOpponentSlot(state.online.slot);
+  const opponentSubmitted = room.submitted[opponentSlot];
+  if (state.online.pendingActionId && selfSubmitted && !opponentSubmitted) {
+    updateRoomStatus(`房间 ${room.code}：你已出招，等待对手。`);
+  } else if (!state.online.pendingActionId && opponentSubmitted) {
+    updateRoomStatus(`房间 ${room.code}：对手已出招，轮到你。`);
+  } else {
+    updateRoomStatus(`房间 ${room.code}：请选择本回合动作。`);
+  }
+
+  if (room.result && !state.online.appliedRounds.has(room.result.round)) {
+    applyOnlineResult(room.result);
+  }
+}
+
+function startOnlineMatch(room) {
+  const selfSlot = state.online.slot;
+  const opponentSlot = getOpponentSlot(selfSlot);
+  const selfHeroId = room.players[selfSlot].heroId;
+  const opponentHeroId = room.players[opponentSlot].heroId;
+  state.player = makeFighter("你", selfHeroId);
+  state.enemy = makeFighter("对手", opponentHeroId);
+  state.round = room.round;
+  state.over = false;
+  state.online.initialized = true;
+  state.online.pendingActionId = "";
+  ui.playerHero.value = selfHeroId;
+  ui.enemyHero.value = opponentHeroId;
+  ui.playerSideLabel.textContent = "你";
+  ui.enemySideLabel.textContent = "对手";
+  ui.playerLast.textContent = "等待出手";
+  ui.enemyLast.textContent = "等待出手";
+  ui.battleLog.innerHTML = "";
+  addLog(`1v1 开局：你 HP=${formatHearts(state.player.hp)}，XP=${state.player.xp}；对手 HP=${formatHearts(state.enemy.hp)}，XP=${state.enemy.xp}。`);
+  render();
+}
+
+async function applyOnlineResult(result) {
+  const selfSlot = state.online.slot;
+  const opponentSlot = getOpponentSlot(selfSlot);
+  const playerActionId = result.actions[selfSlot];
+  const enemyActionId = result.actions[opponentSlot];
+  const playerAction = getActionById(playerActionId, state.player);
+  const enemyAction = getActionById(enemyActionId, state.enemy);
+  if (!playerAction || !enemyAction) {
+    updateRoomStatus("结算失败：动作不存在。");
+    return;
+  }
+
+  const report = resolveRound(playerAction, enemyAction);
+  ui.playerLast.textContent = report.playerSummary;
+  ui.enemyLast.textContent = report.enemySummary;
+  for (const item of report.logs) {
+    addLog(item.text, item.kind);
+  }
+  state.online.appliedRounds.add(result.round);
+  state.online.pendingActionId = "";
+  if (!state.over) {
+    state.round = result.round + 1;
+  }
+  render();
+
+  try {
+    await apiRequest(`/api/rooms/${state.online.roomCode}/advance`, {
+      playerId: state.online.playerId,
+      round: result.round,
+    });
+  } catch (error) {
+    updateRoomStatus(`确认结算失败：${error.message}`);
+  }
+}
+
+function getOpponentSlot(slot) {
+  return slot === "p1" ? "p2" : "p1";
+}
+
+function normalizeRoomCode(value) {
+  return value.trim().toUpperCase();
+}
+
+function updateRoomStatus(text) {
+  ui.roomStatus.textContent = text;
+}
+
+async function apiGet(path) {
+  const response = await fetch(path);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return data;
+}
+
+async function apiRequest(path, payload) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+  return data;
+}
+
 ui.resetBtn.addEventListener("click", resetGame);
+ui.cpuModeBtn.addEventListener("click", resetGame);
+ui.createRoomBtn.addEventListener("click", createOnlineRoom);
+ui.joinRoomBtn.addEventListener("click", joinOnlineRoom);
 ui.clearLogBtn.addEventListener("click", () => {
   ui.battleLog.innerHTML = "";
 });
-ui.playerHero.addEventListener("change", resetGame);
-ui.enemyHero.addEventListener("change", resetGame);
+ui.playerHero.addEventListener("change", () => {
+  if (state.mode === "cpu") resetGame();
+});
+ui.enemyHero.addEventListener("change", () => {
+  if (state.mode === "cpu") resetGame();
+});
 
 populateHeroes();
 renderActions();
