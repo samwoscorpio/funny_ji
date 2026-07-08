@@ -86,6 +86,13 @@ const BALANCE = {
       discountedAttackCost: 1,
       incomingAttackPower: 1,
     },
+    astrologer: {
+      maxHp: 2,
+      predictionCost: 2,
+      drainCost: 2,
+      drainAmount: 4,
+      ghostHealPerDamage: 1,
+    },
   },
   ai: {
     lowEnergyTarget: 2,
@@ -393,6 +400,65 @@ const HEROES = {
         } else {
           self.flags.iceDaggerStreak = 0;
         }
+      },
+    },
+  },
+  astrologer: {
+    id: "astrologer",
+    name: "占星家 Astrologer",
+    maxHp: BALANCE.heroes.astrologer.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `鬼刀可吸血。A 预判：${BALANCE.heroes.astrologer.predictionCost} 费，本回合带小防，下一回合从天而降一把鬼刀且也带小防。B 吸：${BALANCE.heroes.astrologer.drainCost} 费，若目标无防御等级，吸取最多 ${BALANCE.heroes.astrologer.drainAmount} XP。`,
+    passives: [{ name: "星蚀", text: `鬼刀造成伤害后回复 ${BALANCE.heroes.astrologer.ghostHealPerDamage} HP` }],
+    activeSkills: [
+      {
+        id: "astrologer-predict",
+        kind: "skill",
+        name: "A 预判",
+        cost: BALANCE.heroes.astrologer.predictionCost,
+        power: 0,
+        defense: BALANCE.defenseGrades.small,
+        xpGain: 0,
+        text: `花费 ${BALANCE.heroes.astrologer.predictionCost}，本回合小防；下回合落下一把鬼刀并继续小防`,
+        effects: {
+          prediction: true,
+        },
+      },
+      {
+        id: "astrologer-drain",
+        kind: "skill",
+        name: "B 吸",
+        cost: BALANCE.heroes.astrologer.drainCost,
+        power: 0,
+        defense: 0,
+        xpGain: 0,
+        text: `花费 ${BALANCE.heroes.astrologer.drainCost}，目标无防御时吸取 ${BALANCE.heroes.astrologer.drainAmount} XP`,
+        effects: {
+          drainXp: true,
+        },
+      },
+    ],
+    hooks: {
+      modifyDefense(value, self) {
+        return hasStatus(self, "astrologer-prediction") ? Math.max(value, BALANCE.defenseGrades.small) : value;
+      },
+      onDealDamage(self, target, context) {
+        if (context.action.id !== "atk-5") return;
+        const beforeHp = self.hp;
+        self.hp = Math.min(self.maxHp, self.hp + BALANCE.heroes.astrologer.ghostHealPerDamage * context.damage);
+        const healed = self.hp - beforeHp;
+        context.notes.push(`${self.label}的鬼刀吸血，回复 ${healed} HP，当前 ${formatHearts(self.hp)}。`);
+      },
+      afterRound(self, opponent, context) {
+        if (!context.selfAction.effects?.prediction) return;
+        setStatus(self, {
+          id: "astrologer-prediction",
+          name: "预判",
+          text: "下回合鬼刀，小防",
+          turns: 1,
+          fresh: true,
+        });
+        context.notes.push(`${self.label}完成预判：下回合鬼刀从天而降，并获得小防。`);
       },
     },
   },
@@ -780,6 +846,11 @@ function resolveRound(playerAction, enemyAction) {
 
   const damageNotes = [];
 
+  applyPostDefenseSkillEffects(player, playerAction, enemy, enemyDefense, logs);
+  applyPostDefenseSkillEffects(enemy, enemyAction, player, playerDefense, logs);
+  applyScheduledGhostAttack(player, enemy, enemyDefense, logs, damageNotes, ui.enemyCard, contextForPlayer);
+  applyScheduledGhostAttack(enemy, player, playerDefense, logs, damageNotes, ui.playerCard, contextForEnemy);
+
   if (playerAction.kind === "attack" && enemyAction.kind === "attack") {
     if (playerAttack > enemyAttack) {
       contextForPlayer.hit = true;
@@ -906,6 +977,37 @@ function hasStatus(fighter, statusId) {
 
 function addIceShards(fighter, amount) {
   fighter.flags.iceShards = (fighter.flags.iceShards || 0) + amount;
+}
+
+function setStatus(fighter, status) {
+  fighter.statuses = fighter.statuses.filter((entry) => entry.id !== status.id);
+  fighter.statuses.push(status);
+}
+
+function applyPostDefenseSkillEffects(fighter, action, target, targetDefense, logs) {
+  if (!action.effects?.drainXp) return;
+  const canDrain = BALANCE.heroes.iceSorcerer.daggerPower > targetDefense;
+  if (!canDrain) {
+    logs.push({ text: `${fighter.label}使用 ${action.name}，但${target.label}有防御等级，吸取失败。` });
+    return;
+  }
+
+  const drained = Math.min(BALANCE.heroes.astrologer.drainAmount, target.xp);
+  target.xp -= drained;
+  fighter.xp += drained;
+  logs.push({ text: `${fighter.label}使用 ${action.name}，从${target.label}身上吸取 ${drained} XP。` });
+}
+
+function applyScheduledGhostAttack(source, target, targetDefense, logs, damageNotes, targetCard, context) {
+  if (!hasStatus(source, "astrologer-prediction")) return;
+  const ghostAction = ACTION_BY_ID["atk-5"];
+  const ghostAttack = getAttack(source, ghostAction, target);
+  if (ghostAttack > targetDefense) {
+    context.hit = true;
+    context.damageDealt += dealDamage(source, target, ghostAction, `${source.label}预判的鬼刀从天而降，击穿${target.label}防御 ${formatDefense(targetDefense)}，${target.label} HP -1。`, logs, damageNotes, targetCard);
+  } else {
+    logs.push({ text: `${source.label}预判的鬼刀从天而降，强度 ${ghostAttack} 未超过${target.label}防御 ${formatDefense(targetDefense)}。` });
+  }
 }
 
 function tickStatuses(fighter, notes) {
