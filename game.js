@@ -72,7 +72,7 @@ const BALANCE = {
       berserkDamageMultiplier: 2,
     },
     iceSorcerer: {
-      maxHp: 1,
+      maxHp: 2,
       startingShards: 1,
       critThreshold: 5,
       maxCritSpend: 7,
@@ -322,7 +322,7 @@ const HEROES = {
     name: "冰法 Ice Sorcerer",
     maxHp: BALANCE.heroes.iceSorcerer.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `积攒寒冰碎片，满 ${BALANCE.heroes.iceSorcerer.critThreshold} 个后命中攻击会暴击并回复 ${BALANCE.heroes.iceSorcerer.critHeal} HP。3费攻只花 ${BALANCE.heroes.iceSorcerer.discountedAttackCost} XP，且别人用3费攻打冰法时只有1费攻效果。`,
+    description: `积攒寒冰碎片，满 ${BALANCE.heroes.iceSorcerer.critThreshold} 个后命中攻击会暴击并回复 ${BALANCE.heroes.iceSorcerer.critHeal} HP。3费攻只花 ${BALANCE.heroes.iceSorcerer.discountedAttackCost} XP，且别人用3费攻打冰法时只有1费攻效果。第一回合不能使用 Ji刀。`,
     passives: [
       { name: "寒冰碎片", text: `开局 ${BALANCE.heroes.iceSorcerer.startingShards} 个，满 ${BALANCE.heroes.iceSorcerer.critThreshold} 暴击回血` },
       { name: "冰甲", text: `3费攻花费 ${BALANCE.heroes.iceSorcerer.discountedAttackCost}，来袭3费攻强度变 ${BALANCE.heroes.iceSorcerer.incomingAttackPower}` },
@@ -349,6 +349,7 @@ const HEROES = {
       },
       canUseAction(action, self) {
         if (action.id !== "ice-dagger") return true;
+        if (state.round <= 1) return false;
         return (self.flags.iceDaggerStreak || 0) < BALANCE.heroes.iceSorcerer.daggerStreakLimit;
       },
       modifyCost(value, self, action) {
