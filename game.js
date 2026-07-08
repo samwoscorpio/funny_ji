@@ -408,7 +408,7 @@ const HEROES = {
     name: "占星家 Astrologer",
     maxHp: BALANCE.heroes.astrologer.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `鬼刀可吸血。A 预判：${BALANCE.heroes.astrologer.predictionCost} 费，本回合带小防，下一回合从天而降一把鬼刀且也带小防。B 吸：${BALANCE.heroes.astrologer.drainCost} 费，若目标无防御等级，吸取最多 ${BALANCE.heroes.astrologer.drainAmount} XP。`,
+    description: `鬼刀可吸血。A 预判：${BALANCE.heroes.astrologer.predictionCost} 费，本回合带小防，下一回合从天而降一把鬼刀且也带小防。B 吸：${BALANCE.heroes.astrologer.drainCost} 费，若目标无防御等级，目标最多 -${BALANCE.heroes.astrologer.drainAmount} XP 至 0，占星家 +${BALANCE.heroes.astrologer.drainAmount} XP。`,
     passives: [{ name: "星蚀", text: `鬼刀造成伤害后回复 ${BALANCE.heroes.astrologer.ghostHealPerDamage} HP` }],
     activeSkills: [
       {
@@ -992,8 +992,8 @@ function applyPostDefenseSkillEffects(fighter, action, target, targetDefense, lo
     return;
   }
 
-  const drained = Math.min(BALANCE.heroes.astrologer.drainAmount, target.xp);
-  target.xp -= drained;
+  const drained = BALANCE.heroes.astrologer.drainAmount;
+  target.xp = Math.max(0, target.xp - drained);
   fighter.xp += drained;
   logs.push({ text: `${fighter.label}使用 ${action.name}，从${target.label}身上吸取 ${drained} XP。` });
 }
