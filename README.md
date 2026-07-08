@@ -30,6 +30,8 @@ HOST=0.0.0.0 python3 server.py
 
 4. Open the Render service URL. Share that URL with friends.
 
+The free Render plan may sleep after inactivity, so the first visit can take a little longer.
+
 ### Docker platforms
 
 Use the included `Dockerfile` on platforms such as Railway, Fly.io, or any VPS that can run Docker.
