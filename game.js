@@ -64,6 +64,13 @@ const BALANCE = {
       maxHp: 2,
       startingXp: 2,
     },
+    werewolf: {
+      maxHp: 2,
+      berserkThreshold: 2,
+      invincibleRounds: 2,
+      berserkJiXpGain: 2,
+      berserkDamageMultiplier: 2,
+    },
   },
   ai: {
     lowEnergyTarget: 2,
@@ -260,6 +267,40 @@ const HEROES = {
     passives: [{ name: "虚荣", text: `开局 +${BALANCE.heroes.vaingloriousWarrior.startingXp} XP` }],
     activeSkills: [],
     hooks: {},
+  },
+  werewolf: {
+    id: "werewolf",
+    name: "狼人 Werewolf",
+    maxHp: BALANCE.heroes.werewolf.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `觉醒型英雄，首次 HP 低于 ${BALANCE.heroes.werewolf.berserkThreshold} 时进入狂暴，获得 ${BALANCE.heroes.werewolf.invincibleRounds} 回合无敌；狂暴后 Ji 获得 ${BALANCE.heroes.werewolf.berserkJiXpGain} XP，造成伤害翻倍。`,
+    passives: [{ name: "觉醒技", text: `低血狂暴，${BALANCE.heroes.werewolf.invincibleRounds} 回合无敌，Ji +${BALANCE.heroes.werewolf.berserkJiXpGain}，伤害 x${BALANCE.heroes.werewolf.berserkDamageMultiplier}` }],
+    activeSkills: [],
+    hooks: {
+      modifyDefense(value, self) {
+        return hasStatus(self, "werewolf-invincible") ? BALANCE.defenseGrades.invincible : value;
+      },
+      modifyXpGain(value, self, action) {
+        return self.flags.berserk && action.id === "ji" ? BALANCE.heroes.werewolf.berserkJiXpGain : value;
+      },
+      modifyDamage(value, self, target, context) {
+        return self.flags.berserk && context.action.kind === "attack"
+          ? value * BALANCE.heroes.werewolf.berserkDamageMultiplier
+          : value;
+      },
+      afterTakeDamage(self, attacker, context) {
+        if (self.flags.berserk || self.hp >= BALANCE.heroes.werewolf.berserkThreshold) return;
+        self.flags.berserk = true;
+        self.statuses.push({
+          id: "werewolf-invincible",
+          name: "狂暴无敌",
+          text: `${BALANCE.heroes.werewolf.invincibleRounds} 回合`,
+          turns: BALANCE.heroes.werewolf.invincibleRounds,
+          fresh: true,
+        });
+        context.notes.push(`${self.label}首次低于 ${BALANCE.heroes.werewolf.berserkThreshold} HP，触发狂暴：获得 ${BALANCE.heroes.werewolf.invincibleRounds} 回合无敌，Ji 改为 +${BALANCE.heroes.werewolf.berserkJiXpGain} XP，伤害翻倍。`);
+      },
+    },
   },
 };
 
@@ -469,6 +510,9 @@ function getFighterStatusEntries(fighter) {
   if (fighter.flags.jiStreak > 0) {
     entries.push({ name: "Ji 连击", text: `${fighter.flags.jiStreak}` });
   }
+  if (fighter.flags.berserk) {
+    entries.push({ name: "狂暴", text: `Ji +${BALANCE.heroes.werewolf.berserkJiXpGain}，伤害 x${BALANCE.heroes.werewolf.berserkDamageMultiplier}` });
+  }
   for (const status of fighter.statuses) {
     entries.push({ name: status.name, text: status.text || "" });
   }
@@ -664,6 +708,8 @@ function resolveRound(playerAction, enemyAction) {
 
   runHook(player, "afterRound", player, enemy, contextForPlayer);
   runHook(enemy, "afterRound", enemy, player, contextForEnemy);
+  tickStatuses(player, contextForPlayer.notes);
+  tickStatuses(enemy, contextForEnemy.notes);
 
   for (const note of [...contextForPlayer.notes, ...contextForEnemy.notes]) {
     logs.push({ text: note });
@@ -689,9 +735,12 @@ function resolveRound(playerAction, enemyAction) {
 }
 
 function dealDamage(attacker, defender, action, text, logs, damageNotes, defenderCard) {
-  defender.hp -= 1;
-  logs.push({ kind: "impact", text });
-  runHook(attacker, "onDealDamage", attacker, defender, { action, damage: 1, notes: damageNotes });
+  const damage = getDamage(attacker, defender, action);
+  defender.hp -= damage;
+  logs.push({ kind: "impact", text: text.replace("HP -1", `HP -${damage}`) });
+  const context = { action, damage, notes: damageNotes };
+  runHook(attacker, "onDealDamage", attacker, defender, context);
+  runHook(defender, "afterTakeDamage", defender, attacker, context);
   flash(defenderCard);
 }
 
@@ -728,6 +777,37 @@ function getAttack(fighter, action) {
 function getXpGain(fighter, action) {
   const base = action.xpGain || 0;
   return runHook(fighter, "modifyXpGain", base, fighter, action);
+}
+
+function getDamage(attacker, defender, action) {
+  return runHook(attacker, "modifyDamage", 1, attacker, defender, { action });
+}
+
+function hasStatus(fighter, statusId) {
+  return fighter.statuses.some((status) => status.id === statusId);
+}
+
+function tickStatuses(fighter, notes) {
+  const remaining = [];
+  for (const status of fighter.statuses) {
+    if (!status.turns) {
+      remaining.push(status);
+      continue;
+    }
+    if (status.fresh) {
+      status.fresh = false;
+      remaining.push(status);
+      continue;
+    }
+    status.turns -= 1;
+    if (status.turns > 0) {
+      status.text = `${status.turns} 回合`;
+      remaining.push(status);
+    } else {
+      notes.push(`${fighter.label}的${status.name}结束。`);
+    }
+  }
+  fighter.statuses = remaining;
 }
 
 function applyPreDamageEffects(fighter, action, logs) {
