@@ -1,0 +1,756 @@
+const BALANCE = {
+  startingHp: 1,
+  startingXp: 0,
+  maxHpBonus: 2,
+  xpMeterMax: 10,
+  defenseGrades: {
+    none: 0,
+    small: 4,
+    mid: 9,
+    big: 10,
+    super: 99,
+    invincible: 999,
+  },
+  actions: {
+    charge: {
+      ji: { name: "Ji", cost: 0, defense: 0, xpGain: 1 },
+    },
+    defenses: {
+      "def-small": { name: "小防", cost: 0, defense: 4 },
+      "def-mid": { name: "中防", cost: 1, defense: 9 },
+      "def-big": { name: "大防", cost: 2, defense: 10 },
+    },
+    attacks: [
+      { id: "atk-1", cost: 1, power: 1 },
+      { id: "atk-2", cost: 2, power: 2 },
+      { id: "atk-3", cost: 3, power: 3 },
+      { id: "atk-4", cost: 4, power: 4 },
+      { id: "atk-5", cost: 5, power: 5 },
+      { id: "atk-6", cost: 6, power: 6 },
+      { id: "atk-7", cost: 7, power: 7 },
+      { id: "atk-8", cost: 8, power: 8 },
+      { id: "atk-9", cost: 9, power: 9 },
+      { id: "atk-10", cost: 10, power: 10 },
+    ],
+  },
+  heroes: {
+    battery: {
+      jiStreakRequired: 2,
+      bonusXp: 1,
+    },
+    guard: {
+      defenseBonus: 1,
+    },
+    breaker: {
+      minAttackCost: 5,
+      attackBonus: 1,
+    },
+    priest: {
+      maxHp: 3,
+      allowedAttackCosts: [1, 5, 10],
+      shieldCost: 1,
+      healCost: 4,
+      healAmount: 1,
+    },
+    assassin: {
+      maxHp: 1,
+      jiXpGain: 4,
+    },
+    vampire: {
+      maxHp: 2,
+      healPerDamage: 1,
+    },
+    vaingloriousWarrior: {
+      maxHp: 2,
+      startingXp: 2,
+    },
+  },
+  ai: {
+    lowEnergyTarget: 2,
+    highThreatAttack: 5,
+  },
+};
+
+const ACTIONS = buildActions(BALANCE);
+
+function buildActions(balance) {
+  const chargeActions = Object.entries(balance.actions.charge).map(([id, action]) => ({
+    id,
+    kind: "charge",
+    name: action.name,
+    cost: action.cost,
+    power: 0,
+    defense: action.defense,
+    xpGain: action.xpGain,
+    text: `花费 ${action.cost}，XP +${action.xpGain}，防御 ${action.defense}`,
+  }));
+
+  const defenseActions = Object.entries(balance.actions.defenses).map(([id, action]) => ({
+    id,
+    kind: "defense",
+    name: action.name,
+    cost: action.cost,
+    power: 0,
+    defense: action.defense,
+    xpGain: 0,
+    text: `花费 ${action.cost}，防御 ${action.defense}`,
+  }));
+
+  const attackActions = balance.actions.attacks.map((action) => ({
+    id: action.id,
+    kind: "attack",
+    name: action.name || `${action.cost}费攻`,
+    cost: action.cost,
+    power: action.power,
+    defense: 0,
+    xpGain: 0,
+    text: `花费 ${action.cost}，攻击强度 ${action.power}`,
+  }));
+
+  return [...chargeActions, ...defenseActions, ...attackActions];
+}
+
+const ACTION_BY_ID = Object.fromEntries(ACTIONS.map((action) => [action.id, action]));
+
+const HEROES = {
+  classic: {
+    id: "classic",
+    name: "经典武者",
+    maxHp: BALANCE.startingHp,
+    startingXp: BALANCE.startingXp,
+    description: "无额外机制，完全按童年规则结算。",
+    passives: [],
+    activeSkills: [],
+    hooks: {},
+  },
+  battery: {
+    id: "battery",
+    name: "聚气师",
+    maxHp: BALANCE.startingHp,
+    startingXp: BALANCE.startingXp,
+    description: `连续使用 Ji 达到 ${BALANCE.heroes.battery.jiStreakRequired} 回合时，本回合额外获得 ${BALANCE.heroes.battery.bonusXp} XP。`,
+    passives: [{ name: "聚气", text: `连续 Ji 后额外 +${BALANCE.heroes.battery.bonusXp} XP` }],
+    activeSkills: [],
+    hooks: {
+      afterRound(self, opponent, context) {
+        if (context.selfAction.id !== "ji") {
+          self.flags.jiStreak = 0;
+          return;
+        }
+        self.flags.jiStreak = (self.flags.jiStreak || 0) + 1;
+        if (self.flags.jiStreak >= BALANCE.heroes.battery.jiStreakRequired) {
+          self.xp += BALANCE.heroes.battery.bonusXp;
+          context.notes.push(`${self.label}连续 Ji，额外获得 ${BALANCE.heroes.battery.bonusXp} XP。`);
+        }
+      },
+    },
+  },
+  guard: {
+    id: "guard",
+    name: "铁壁",
+    maxHp: BALANCE.startingHp,
+    startingXp: BALANCE.startingXp,
+    description: `所有防御手势的防御值 +${BALANCE.heroes.guard.defenseBonus}。`,
+    passives: [{ name: "铁壁", text: `防御值 +${BALANCE.heroes.guard.defenseBonus}` }],
+    activeSkills: [],
+    hooks: {
+      modifyDefense(value, self, action) {
+        return action.kind === "defense" ? value + BALANCE.heroes.guard.defenseBonus : value;
+      },
+    },
+  },
+  breaker: {
+    id: "breaker",
+    name: "破阵手",
+    maxHp: BALANCE.startingHp,
+    startingXp: BALANCE.startingXp,
+    description: `使用 ${BALANCE.heroes.breaker.minAttackCost} 费及以上攻击时，攻击强度 +${BALANCE.heroes.breaker.attackBonus}。`,
+    passives: [{ name: "破阵", text: `${BALANCE.heroes.breaker.minAttackCost} 费以上攻击 +${BALANCE.heroes.breaker.attackBonus}` }],
+    activeSkills: [],
+    hooks: {
+      modifyAttack(value, self, action) {
+        return action.kind === "attack" && action.cost >= BALANCE.heroes.breaker.minAttackCost
+          ? value + BALANCE.heroes.breaker.attackBonus
+          : value;
+      },
+    },
+  },
+  priest: {
+    id: "priest",
+    name: "牧师 Priest",
+    maxHp: BALANCE.heroes.priest.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: "辅助型英雄，血量更高，但只能使用 1 费、5 费、10 费攻击。",
+    passives: [{ name: "辅助", text: "只能使用 1/5/10 费攻击" }],
+    activeSkills: [
+      {
+        id: "priest-shield",
+        kind: "skill",
+        name: "A 小盾",
+        cost: BALANCE.heroes.priest.shieldCost,
+        power: 0,
+        defense: BALANCE.defenseGrades.small,
+        xpGain: 0,
+        text: `花费 ${BALANCE.heroes.priest.shieldCost}，自带小防，防御升一大级，清负面`,
+        effects: {
+          clearNegative: true,
+          upgradeDefense: true,
+        },
+      },
+      {
+        id: "priest-heal",
+        kind: "skill",
+        name: "B 奶",
+        cost: BALANCE.heroes.priest.healCost,
+        power: 0,
+        defense: BALANCE.defenseGrades.invincible,
+        xpGain: 0,
+        text: `花费 ${BALANCE.heroes.priest.healCost}，本回合无敌，回复 ${BALANCE.heroes.priest.healAmount} HP，清负面`,
+        effects: {
+          clearNegative: true,
+          heal: BALANCE.heroes.priest.healAmount,
+          invincible: true,
+        },
+      },
+    ],
+    hooks: {
+      canUseAction(action) {
+        if (action.kind !== "attack") return true;
+        return BALANCE.heroes.priest.allowedAttackCosts.includes(action.cost);
+      },
+    },
+  },
+  assassin: {
+    id: "assassin",
+    name: "刺客 Assassin",
+    maxHp: BALANCE.heroes.assassin.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `高爆发英雄，HP=${BALANCE.heroes.assassin.maxHp}，每次 Ji 获得 ${BALANCE.heroes.assassin.jiXpGain} XP。`,
+    passives: [{ name: "疾蓄", text: `Ji 获得 ${BALANCE.heroes.assassin.jiXpGain} XP` }],
+    activeSkills: [],
+    hooks: {
+      modifyXpGain(value, self, action) {
+        return action.id === "ji" ? BALANCE.heroes.assassin.jiXpGain : value;
+      },
+    },
+  },
+  vampire: {
+    id: "vampire",
+    name: "吸血鬼 Vampire",
+    maxHp: BALANCE.heroes.vampire.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `续航型英雄，HP=${BALANCE.heroes.vampire.maxHp}，每造成 1 点伤害回复 ${BALANCE.heroes.vampire.healPerDamage} HP。`,
+    passives: [{ name: "吸血", text: `造成伤害后回复 ${BALANCE.heroes.vampire.healPerDamage} HP` }],
+    activeSkills: [],
+    hooks: {
+      onDealDamage(self, target, context) {
+        const beforeHp = self.hp;
+        self.hp = Math.min(self.maxHp, self.hp + BALANCE.heroes.vampire.healPerDamage * context.damage);
+        const healed = self.hp - beforeHp;
+        context.notes.push(`${self.label}触发吸血，回复 ${healed} HP，当前 ${formatHearts(self.hp)}。`);
+      },
+    },
+  },
+  vaingloriousWarrior: {
+    id: "vaingloriousWarrior",
+    name: "虚荣勇士 Vainglorious Warrior",
+    maxHp: BALANCE.heroes.vaingloriousWarrior.maxHp,
+    startingXp: BALANCE.heroes.vaingloriousWarrior.startingXp,
+    description: `起手强势英雄，HP=${BALANCE.heroes.vaingloriousWarrior.maxHp}，开局自带 ${BALANCE.heroes.vaingloriousWarrior.startingXp} XP。`,
+    passives: [{ name: "虚荣", text: `开局 +${BALANCE.heroes.vaingloriousWarrior.startingXp} XP` }],
+    activeSkills: [],
+    hooks: {},
+  },
+};
+
+const state = {
+  round: 1,
+  over: false,
+  player: null,
+  enemy: null,
+};
+
+const ui = {
+  roundNo: document.querySelector("#roundNo"),
+  playerHero: document.querySelector("#playerHero"),
+  enemyHero: document.querySelector("#enemyHero"),
+  playerHeroName: document.querySelector("#playerHeroName"),
+  enemyHeroName: document.querySelector("#enemyHeroName"),
+  playerHeroText: document.querySelector("#playerHeroText"),
+  enemyHeroText: document.querySelector("#enemyHeroText"),
+  playerPassivePanel: document.querySelector("#playerPassivePanel"),
+  enemyPassivePanel: document.querySelector("#enemyPassivePanel"),
+  playerPassives: document.querySelector("#playerPassives"),
+  enemyPassives: document.querySelector("#enemyPassives"),
+  playerHp: document.querySelector("#playerHp"),
+  enemyHp: document.querySelector("#enemyHp"),
+  playerXp: document.querySelector("#playerXp"),
+  enemyXp: document.querySelector("#enemyXp"),
+  playerHpBar: document.querySelector("#playerHpBar"),
+  enemyHpBar: document.querySelector("#enemyHpBar"),
+  playerXpBar: document.querySelector("#playerXpBar"),
+  enemyXpBar: document.querySelector("#enemyXpBar"),
+  playerLast: document.querySelector("#playerLast"),
+  enemyLast: document.querySelector("#enemyLast"),
+  playerCard: document.querySelector("#playerCard"),
+  enemyCard: document.querySelector("#enemyCard"),
+  chargeActions: document.querySelector("#chargeActions"),
+  defenseActions: document.querySelector("#defenseActions"),
+  skillGroup: document.querySelector("#skillGroup"),
+  skillActions: document.querySelector("#skillActions"),
+  attackActions: document.querySelector("#attackActions"),
+  battleLog: document.querySelector("#battleLog"),
+  resetBtn: document.querySelector("#resetBtn"),
+  clearLogBtn: document.querySelector("#clearLogBtn"),
+};
+
+function makeFighter(label, heroId) {
+  const hero = HEROES[heroId];
+  const startingHp = hero.maxHp;
+  return {
+    label,
+    heroId,
+    hero,
+    startingHp,
+    hp: startingHp,
+    maxHp: startingHp + BALANCE.maxHpBonus,
+    xp: hero.startingXp,
+    flags: {},
+    statuses: [],
+  };
+}
+
+function resetGame() {
+  state.round = 1;
+  state.over = false;
+  state.player = makeFighter("你", ui.playerHero.value);
+  state.enemy = makeFighter("电脑", ui.enemyHero.value);
+  ui.playerLast.textContent = "等待出手";
+  ui.enemyLast.textContent = "等待出手";
+  ui.battleLog.innerHTML = "";
+  addLog(`开局：你 HP=${formatHearts(state.player.hp)}，XP=${state.player.xp}；电脑 HP=${formatHearts(state.enemy.hp)}，XP=${state.enemy.xp}。`);
+  render();
+}
+
+function populateHeroes() {
+  for (const hero of Object.values(HEROES)) {
+    const playerOption = new Option(hero.name, hero.id);
+    const enemyOption = new Option(hero.name, hero.id);
+    ui.playerHero.add(playerOption);
+    ui.enemyHero.add(enemyOption);
+  }
+  ui.playerHero.value = "classic";
+  ui.enemyHero.value = "guard";
+}
+
+function renderActions() {
+  ui.chargeActions.innerHTML = "";
+  ui.defenseActions.innerHTML = "";
+  ui.attackActions.innerHTML = "";
+
+  for (const action of ACTIONS) {
+    const button = document.createElement("button");
+    button.className = `action-card ${action.kind}`;
+    button.type = "button";
+    button.dataset.action = action.id;
+    button.innerHTML = `<strong>${action.name}</strong><span>${action.text}</span>`;
+    button.addEventListener("click", () => playRound(action.id));
+
+    if (action.kind === "charge") ui.chargeActions.append(button);
+    if (action.kind === "defense") ui.defenseActions.append(button);
+    if (action.kind === "attack") ui.attackActions.append(button);
+  }
+}
+
+function render() {
+  const player = state.player;
+  const enemy = state.enemy;
+
+  ui.roundNo.textContent = state.round;
+  ui.playerHeroName.textContent = player.hero.name;
+  ui.enemyHeroName.textContent = enemy.hero.name;
+  ui.playerHeroText.textContent = player.hero.description;
+  ui.enemyHeroText.textContent = enemy.hero.description;
+  renderSkillActions(player);
+  renderPassivePanel(player, ui.playerPassivePanel, ui.playerPassives);
+  renderPassivePanel(enemy, ui.enemyPassivePanel, ui.enemyPassives);
+
+  ui.playerHp.textContent = formatHearts(player.hp);
+  ui.enemyHp.textContent = formatHearts(enemy.hp);
+  ui.playerXp.textContent = player.xp;
+  ui.enemyXp.textContent = enemy.xp;
+
+  ui.playerHpBar.style.width = `${percentage(player.hp, player.maxHp)}%`;
+  ui.enemyHpBar.style.width = `${percentage(enemy.hp, enemy.maxHp)}%`;
+  ui.playerXpBar.style.width = `${percentage(Math.min(player.xp, BALANCE.xpMeterMax), BALANCE.xpMeterMax)}%`;
+  ui.enemyXpBar.style.width = `${percentage(Math.min(enemy.xp, BALANCE.xpMeterMax), BALANCE.xpMeterMax)}%`;
+
+  document.querySelectorAll("[data-action]").forEach((button) => {
+    const action = getActionById(button.dataset.action, player);
+    if (action) {
+      button.innerHTML = `<strong>${action.name}</strong><span>${describeAction(action, player)}</span>`;
+    }
+    button.disabled = !action || state.over || !canUseAction(player, action);
+  });
+}
+
+function renderSkillActions(fighter) {
+  const skills = fighter.hero.activeSkills || [];
+  ui.skillActions.innerHTML = "";
+  ui.skillGroup.hidden = skills.length === 0;
+
+  for (const skill of skills) {
+    const button = document.createElement("button");
+    button.className = "action-card skill";
+    button.type = "button";
+    button.dataset.action = skill.id;
+    button.innerHTML = `<strong>${skill.name}</strong><span>${skill.text}</span>`;
+    button.addEventListener("click", () => playRound(skill.id));
+    ui.skillActions.append(button);
+  }
+}
+
+function renderPassivePanel(fighter, panel, list) {
+  const entries = getFighterStatusEntries(fighter);
+  list.innerHTML = "";
+  panel.hidden = entries.length === 0;
+
+  for (const entry of entries) {
+    const tag = document.createElement("span");
+    tag.className = "status-tag";
+    tag.textContent = entry.text ? `${entry.name}：${entry.text}` : entry.name;
+    list.append(tag);
+  }
+}
+
+function getFighterStatusEntries(fighter) {
+  const entries = [...(fighter.hero.passives || [])];
+  if (fighter.flags.jiStreak > 0) {
+    entries.push({ name: "Ji 连击", text: `${fighter.flags.jiStreak}` });
+  }
+  for (const status of fighter.statuses) {
+    entries.push({ name: status.name, text: status.text || "" });
+  }
+  return entries;
+}
+
+function percentage(value, max) {
+  if (max <= 0) return 0;
+  return Math.max(0, Math.min(100, (value / max) * 100));
+}
+
+function formatHearts(hp) {
+  return hp > 0 ? "❤️".repeat(hp) : "0";
+}
+
+function playRound(playerActionId) {
+  if (state.over) return;
+  const playerAction = getActionById(playerActionId, state.player);
+  if (!playerAction || !canUseAction(state.player, playerAction)) return;
+
+  const enemyAction = chooseEnemyAction();
+  const report = resolveRound(playerAction, enemyAction);
+  ui.playerLast.textContent = report.playerSummary;
+  ui.enemyLast.textContent = report.enemySummary;
+
+  for (const item of report.logs) {
+    addLog(item.text, item.kind);
+  }
+
+  if (!state.over) {
+    state.round += 1;
+  }
+  render();
+}
+
+function canAfford(fighter, action) {
+  return fighter.xp >= action.cost;
+}
+
+function canUseAction(fighter, action) {
+  if (!canAfford(fighter, action)) return false;
+  return Boolean(runHook(fighter, "canUseAction", action, fighter));
+}
+
+function getActionById(actionId, fighter) {
+  return ACTION_BY_ID[actionId] || getHeroActions(fighter).find((action) => action.id === actionId);
+}
+
+function getHeroActions(fighter) {
+  return fighter?.hero?.activeSkills || [];
+}
+
+function getAvailableActions(fighter) {
+  return [...ACTIONS, ...getHeroActions(fighter)].filter((action) => canUseAction(fighter, action));
+}
+
+function chooseEnemyAction() {
+  const affordable = getAvailableActions(state.enemy);
+  const incomingThreat = assessIncomingThreat(state.player);
+  const usefulDefenses = getUsefulDefenses(affordable, state.enemy, incomingThreat.maxAttack);
+  const weighted = [];
+  const enemyXp = state.enemy.xp;
+
+  for (const action of affordable) {
+    if (action.kind === "defense" && !usefulDefenses.includes(action)) {
+      continue;
+    }
+    if (action.kind === "skill" && !isUsefulSkillAction(state.enemy, action, incomingThreat.maxAttack)) {
+      continue;
+    }
+
+    let weight = 1;
+    if (action.id === "ji") {
+      weight = enemyXp < BALANCE.ai.lowEnergyTarget || incomingThreat.maxAttack === 0 ? 7 : 2;
+    }
+    if (action.kind === "defense") {
+      weight = getDefense(state.enemy, action) >= incomingThreat.maxAttack ? 5 : 2;
+    }
+    if (action.kind === "attack") {
+      if (action.cost <= enemyXp && action.cost <= Math.max(1, incomingThreat.maxAttack + 2)) weight = 3;
+      if (action.cost >= BALANCE.ai.highThreatAttack && incomingThreat.maxAttack === 0) weight = 2;
+      if (action.cost === enemyXp && enemyXp >= 3) weight += 2;
+    }
+    if (action.kind === "skill") {
+      weight = getSkillWeight(state.enemy, action, incomingThreat.maxAttack);
+    }
+    for (let i = 0; i < weight; i += 1) weighted.push(action);
+  }
+
+  return weighted[Math.floor(Math.random() * weighted.length)] || ACTION_BY_ID.ji;
+}
+
+function isUsefulSkillAction(fighter, action, maxIncomingAttack) {
+  const effects = action.effects || {};
+  const canBlock = getDefense(fighter, action) >= maxIncomingAttack && maxIncomingAttack > 0;
+  const canHeal = effects.heal && fighter.hp < fighter.maxHp;
+  return Boolean(canBlock || canHeal);
+}
+
+function getSkillWeight(fighter, action, maxIncomingAttack) {
+  const effects = action.effects || {};
+  let weight = 1;
+  if (getDefense(fighter, action) >= maxIncomingAttack && maxIncomingAttack > 0) weight += 3;
+  if (effects.heal && fighter.hp < fighter.maxHp) weight += 4;
+  if (effects.invincible && maxIncomingAttack >= BALANCE.ai.highThreatAttack) weight += 3;
+  return weight;
+}
+
+function assessIncomingThreat(attacker) {
+  const affordableAttacks = getAvailableActions(attacker).filter((action) => action.kind === "attack");
+  const maxAttack = affordableAttacks.reduce((best, action) => Math.max(best, getAttack(attacker, action)), 0);
+  return {
+    canAttack: maxAttack > 0,
+    maxAttack,
+  };
+}
+
+function getUsefulDefenses(affordableActions, defender, maxIncomingAttack) {
+  if (maxIncomingAttack <= 0) return [];
+
+  const defenses = affordableActions
+    .filter((action) => action.kind === "defense")
+    .sort((a, b) => a.cost - b.cost || getDefense(defender, a) - getDefense(defender, b));
+  const fullBlocks = defenses.filter((action) => getDefense(defender, action) >= maxIncomingAttack);
+
+  if (fullBlocks.length) {
+    const cheapestFullBlock = fullBlocks[0];
+    return defenses.filter((action) => action.cost === cheapestFullBlock.cost && getDefense(defender, action) >= maxIncomingAttack);
+  }
+
+  const bestPartialDefense = defenses.reduce((best, action) => Math.max(best, getDefense(defender, action)), 0);
+  return defenses.filter((action) => getDefense(defender, action) === bestPartialDefense);
+}
+
+function resolveRound(playerAction, enemyAction) {
+  const player = state.player;
+  const enemy = state.enemy;
+  const logs = [];
+  const contextForPlayer = { selfAction: playerAction, opponentAction: enemyAction, notes: [] };
+  const contextForEnemy = { selfAction: enemyAction, opponentAction: playerAction, notes: [] };
+
+  player.xp -= playerAction.cost;
+  enemy.xp -= enemyAction.cost;
+
+  const playerXpGain = getXpGain(player, playerAction);
+  const enemyXpGain = getXpGain(enemy, enemyAction);
+
+  player.xp += playerXpGain;
+  enemy.xp += enemyXpGain;
+
+  applyPreDamageEffects(player, playerAction, logs);
+  applyPreDamageEffects(enemy, enemyAction, logs);
+
+  const playerDefense = getDefense(player, playerAction);
+  const enemyDefense = getDefense(enemy, enemyAction);
+  const playerAttack = getAttack(player, playerAction);
+  const enemyAttack = getAttack(enemy, enemyAction);
+
+  const damageNotes = [];
+
+  if (playerAction.kind === "attack" && enemyAction.kind === "attack") {
+    if (playerAttack > enemyAttack) {
+      dealDamage(player, enemy, playerAction, `你用 ${playerAction.name} 对攻压过电脑 ${enemyAction.name}，电脑 HP -1。`, logs, damageNotes, ui.enemyCard);
+    } else if (enemyAttack > playerAttack) {
+      dealDamage(enemy, player, enemyAction, `电脑用 ${enemyAction.name} 对攻压过你的 ${playerAction.name}，你 HP -1。`, logs, damageNotes, ui.playerCard);
+    } else {
+      logs.push({ text: `双方对攻强度同为 ${playerAttack}，互相抵消。` });
+    }
+  } else {
+    const playerHits = playerAction.kind === "attack" && playerAttack > enemyDefense;
+    const enemyHits = enemyAction.kind === "attack" && enemyAttack > playerDefense;
+
+    if (playerHits) {
+      dealDamage(player, enemy, playerAction, `你用 ${playerAction.name} 击穿电脑防御 ${formatDefense(enemyDefense)}，电脑 HP -1。`, logs, damageNotes, ui.enemyCard);
+    } else if (playerAction.kind === "attack") {
+      logs.push({ text: `你用 ${playerAction.name}，强度 ${playerAttack} 未超过电脑防御 ${formatDefense(enemyDefense)}。` });
+    }
+
+    if (enemyHits) {
+      dealDamage(enemy, player, enemyAction, `电脑用 ${enemyAction.name} 击穿你的防御 ${formatDefense(playerDefense)}，你 HP -1。`, logs, damageNotes, ui.playerCard);
+    } else if (enemyAction.kind === "attack") {
+      logs.push({ text: `电脑用 ${enemyAction.name}，强度 ${enemyAttack} 未超过你的防御 ${formatDefense(playerDefense)}。` });
+    }
+  }
+
+  for (const note of damageNotes) {
+    logs.push({ text: note });
+  }
+
+  runHook(player, "afterRound", player, enemy, contextForPlayer);
+  runHook(enemy, "afterRound", enemy, player, contextForEnemy);
+
+  for (const note of [...contextForPlayer.notes, ...contextForEnemy.notes]) {
+    logs.push({ text: note });
+  }
+
+  const playerSummary = summarizeAction(playerAction, playerAttack, playerDefense, playerXpGain);
+  const enemySummary = summarizeAction(enemyAction, enemyAttack, enemyDefense, enemyXpGain);
+
+  if (player.hp <= 0 && enemy.hp <= 0) {
+    state.over = true;
+    logs.push({ kind: "win", text: "同归于尽，平局。" });
+  } else if (enemy.hp <= 0) {
+    state.over = true;
+    logs.push({ kind: "win", text: "你赢了。" });
+  } else if (player.hp <= 0) {
+    state.over = true;
+    logs.push({ kind: "win", text: "电脑赢了。" });
+  } else if (!logs.length) {
+    logs.push({ text: "双方都没有造成伤害。" });
+  }
+
+  return { logs, playerSummary, enemySummary };
+}
+
+function dealDamage(attacker, defender, action, text, logs, damageNotes, defenderCard) {
+  defender.hp -= 1;
+  logs.push({ kind: "impact", text });
+  runHook(attacker, "onDealDamage", attacker, defender, { action, damage: 1, notes: damageNotes });
+  flash(defenderCard);
+}
+
+function summarizeAction(action, attack, defense, xpGain = action.xpGain) {
+  if (action.kind === "charge") return `${action.name}：XP +${xpGain}，防御 ${formatDefense(defense)}`;
+  if (action.kind === "defense") return `${action.name}：花费 ${action.cost}，防御 ${formatDefense(defense)}`;
+  if (action.kind === "skill") return `${action.name}：花费 ${action.cost}，防御 ${formatDefense(defense)}`;
+  return `${action.name}：花费 ${action.cost}，强度 ${attack}`;
+}
+
+function describeAction(action, fighter) {
+  if (action.kind === "charge") return `花费 ${action.cost}，XP +${getXpGain(fighter, action)}，防御 ${formatDefense(getDefense(fighter, action))}`;
+  if (action.kind === "defense") return `花费 ${action.cost}，防御 ${formatDefense(getDefense(fighter, action))}`;
+  if (action.kind === "skill") return action.text;
+  return `花费 ${action.cost}，攻击强度 ${getAttack(fighter, action)}`;
+}
+
+function getDefense(fighter, action) {
+  let base = action.defense || 0;
+  if (action.effects?.upgradeDefense) {
+    base = upgradeDefenseValue(base);
+  }
+  if (action.effects?.invincible) {
+    base = BALANCE.defenseGrades.invincible;
+  }
+  return runHook(fighter, "modifyDefense", base, fighter, action);
+}
+
+function getAttack(fighter, action) {
+  const base = action.power || 0;
+  return runHook(fighter, "modifyAttack", base, fighter, action);
+}
+
+function getXpGain(fighter, action) {
+  const base = action.xpGain || 0;
+  return runHook(fighter, "modifyXpGain", base, fighter, action);
+}
+
+function applyPreDamageEffects(fighter, action, logs) {
+  if (action.kind !== "skill") return;
+  const effects = action.effects || {};
+  const details = [];
+
+  if (effects.clearNegative) {
+    const before = fighter.statuses.length;
+    fighter.statuses = fighter.statuses.filter((status) => status.type !== "negative");
+    const removed = before - fighter.statuses.length;
+    if (removed > 0) details.push(`移除 ${removed} 个负面效果`);
+  }
+
+  if (effects.heal) {
+    const beforeHp = fighter.hp;
+    fighter.hp = Math.min(fighter.maxHp, fighter.hp + effects.heal);
+    details.push(`回复 ${fighter.hp - beforeHp} HP`);
+  }
+
+  if (effects.upgradeDefense) details.push("本回合防御升一大级");
+  if (effects.invincible) details.push("本回合无敌");
+  logs.push({ text: details.length ? `${fighter.label}使用 ${action.name}，${details.join("，")}。` : `${fighter.label}使用 ${action.name}。` });
+}
+
+function upgradeDefenseValue(value) {
+  const grades = BALANCE.defenseGrades;
+  if (value >= grades.invincible) return grades.invincible;
+  if (value >= grades.super) return grades.super;
+  if (value >= grades.mid) return grades.super;
+  if (value >= grades.small) return grades.mid;
+  return grades.small;
+}
+
+function formatDefense(value) {
+  if (value >= BALANCE.defenseGrades.invincible) return "无敌";
+  if (value >= BALANCE.defenseGrades.super) return "超防";
+  return String(value);
+}
+
+function runHook(fighter, hookName, ...args) {
+  const hook = fighter.hero.hooks[hookName];
+  if (!hook) return args[0];
+  const result = hook(...args);
+  return result === undefined ? args[0] : result;
+}
+
+function addLog(text, kind = "") {
+  const item = document.createElement("li");
+  if (kind) item.className = kind;
+  item.textContent = `R${state.round}｜${text}`;
+  ui.battleLog.prepend(item);
+}
+
+function flash(element) {
+  element.classList.remove("shake");
+  window.requestAnimationFrame(() => {
+    element.classList.add("shake");
+  });
+}
+
+ui.resetBtn.addEventListener("click", resetGame);
+ui.clearLogBtn.addEventListener("click", () => {
+  ui.battleLog.innerHTML = "";
+});
+ui.playerHero.addEventListener("change", resetGame);
+ui.enemyHero.addEventListener("change", resetGame);
+
+populateHeroes();
+renderActions();
+resetGame();
