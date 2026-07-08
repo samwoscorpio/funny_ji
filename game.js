@@ -71,6 +71,21 @@ const BALANCE = {
       berserkJiXpGain: 2,
       berserkDamageMultiplier: 2,
     },
+    iceSorcerer: {
+      maxHp: 1,
+      startingShards: 1,
+      critThreshold: 5,
+      maxCritSpend: 7,
+      critDamageMultiplier: 2,
+      critHeal: 1,
+      daggerPower: 0.1,
+      daggerHitShards: 2,
+      daggerMissShards: 1,
+      daggerStreakLimit: 2,
+      discountedAttackId: "atk-3",
+      discountedAttackCost: 1,
+      incomingAttackPower: 1,
+    },
   },
   ai: {
     lowEnergyTarget: 2,
@@ -302,6 +317,84 @@ const HEROES = {
       },
     },
   },
+  iceSorcerer: {
+    id: "iceSorcerer",
+    name: "冰法 Ice Sorcerer",
+    maxHp: BALANCE.heroes.iceSorcerer.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `积攒寒冰碎片，满 ${BALANCE.heroes.iceSorcerer.critThreshold} 个后命中攻击会暴击并回复 ${BALANCE.heroes.iceSorcerer.critHeal} HP。3费攻只花 ${BALANCE.heroes.iceSorcerer.discountedAttackCost} XP，且别人用3费攻打冰法时只有1费攻效果。`,
+    passives: [
+      { name: "寒冰碎片", text: `开局 ${BALANCE.heroes.iceSorcerer.startingShards} 个，满 ${BALANCE.heroes.iceSorcerer.critThreshold} 暴击回血` },
+      { name: "冰甲", text: `3费攻花费 ${BALANCE.heroes.iceSorcerer.discountedAttackCost}，来袭3费攻强度变 ${BALANCE.heroes.iceSorcerer.incomingAttackPower}` },
+    ],
+    activeSkills: [
+      {
+        id: "ice-dagger",
+        kind: "attack",
+        name: "Ji刀",
+        cost: 0,
+        power: BALANCE.heroes.iceSorcerer.daggerPower,
+        defense: 0,
+        xpGain: 0,
+        text: `花费 0，攻击强度 ${BALANCE.heroes.iceSorcerer.daggerPower}，命中 +${BALANCE.heroes.iceSorcerer.daggerHitShards}🧊，未命中 +${BALANCE.heroes.iceSorcerer.daggerMissShards}🧊`,
+        effects: {
+          trueDamage: true,
+        },
+      },
+    ],
+    hooks: {
+      init(self) {
+        self.flags.iceShards = BALANCE.heroes.iceSorcerer.startingShards;
+        self.flags.iceDaggerStreak = 0;
+      },
+      canUseAction(action, self) {
+        if (action.id !== "ice-dagger") return true;
+        return (self.flags.iceDaggerStreak || 0) < BALANCE.heroes.iceSorcerer.daggerStreakLimit;
+      },
+      modifyCost(value, self, action) {
+        return action.id === BALANCE.heroes.iceSorcerer.discountedAttackId
+          ? BALANCE.heroes.iceSorcerer.discountedAttackCost
+          : value;
+      },
+      modifyIncomingAttack(value, self, attacker, action) {
+        return action.id === BALANCE.heroes.iceSorcerer.discountedAttackId
+          ? BALANCE.heroes.iceSorcerer.incomingAttackPower
+          : value;
+      },
+      modifyDamage(value, self, target, context) {
+        if (context.action.kind !== "attack" || (self.flags.iceShards || 0) < BALANCE.heroes.iceSorcerer.critThreshold) {
+          return value;
+        }
+        const spent = Math.min(BALANCE.heroes.iceSorcerer.maxCritSpend, self.flags.iceShards);
+        self.flags.iceShards -= spent;
+        context.iceCrit = { spent };
+        return value * BALANCE.heroes.iceSorcerer.critDamageMultiplier;
+      },
+      onDealDamage(self, target, context) {
+        if (context.iceCrit) {
+          const beforeHp = self.hp;
+          self.hp = Math.min(self.maxHp, self.hp + BALANCE.heroes.iceSorcerer.critHeal);
+          const healed = self.hp - beforeHp;
+          context.notes.push(`${self.label}消耗 ${context.iceCrit.spent} 个寒冰碎片触发暴击，回复 ${healed} HP，剩余 ${self.flags.iceShards}🧊。`);
+        }
+        if (context.action.id === "ice-dagger") {
+          addIceShards(self, BALANCE.heroes.iceSorcerer.daggerHitShards);
+          context.notes.push(`${self.label}Ji刀命中，获得 ${BALANCE.heroes.iceSorcerer.daggerHitShards} 个寒冰碎片，当前 ${self.flags.iceShards}🧊。`);
+        }
+      },
+      afterRound(self, opponent, context) {
+        if (context.selfAction.id === "ice-dagger") {
+          self.flags.iceDaggerStreak = (self.flags.iceDaggerStreak || 0) + 1;
+          if (!context.hit) {
+            addIceShards(self, BALANCE.heroes.iceSorcerer.daggerMissShards);
+            context.notes.push(`${self.label}Ji刀未命中，获得 ${BALANCE.heroes.iceSorcerer.daggerMissShards} 个寒冰碎片，当前 ${self.flags.iceShards}🧊。`);
+          }
+        } else {
+          self.flags.iceDaggerStreak = 0;
+        }
+      },
+    },
+  },
 };
 
 const state = {
@@ -365,7 +458,7 @@ const ui = {
 function makeFighter(label, heroId) {
   const hero = HEROES[heroId];
   const startingHp = hero.maxHp;
-  return {
+  const fighter = {
     label,
     heroId,
     hero,
@@ -376,6 +469,8 @@ function makeFighter(label, heroId) {
     flags: {},
     statuses: [],
   };
+  runHook(fighter, "init", fighter);
+  return fighter;
 }
 
 function resetGame() {
@@ -513,6 +608,12 @@ function getFighterStatusEntries(fighter) {
   if (fighter.flags.berserk) {
     entries.push({ name: "狂暴", text: `Ji +${BALANCE.heroes.werewolf.berserkJiXpGain}，伤害 x${BALANCE.heroes.werewolf.berserkDamageMultiplier}` });
   }
+  if (fighter.flags.iceShards !== undefined) {
+    entries.push({ name: "寒冰碎片", text: `${"🧊".repeat(Math.min(fighter.flags.iceShards, 10))} x${fighter.flags.iceShards}` });
+  }
+  if (fighter.flags.iceDaggerStreak > 0) {
+    entries.push({ name: "Ji刀连出", text: `${fighter.flags.iceDaggerStreak}/${BALANCE.heroes.iceSorcerer.daggerStreakLimit}` });
+  }
   for (const status of fighter.statuses) {
     entries.push({ name: status.name, text: status.text || "" });
   }
@@ -553,7 +654,7 @@ function playRound(playerActionId) {
 }
 
 function canAfford(fighter, action) {
-  return fighter.xp >= action.cost;
+  return fighter.xp >= getCost(fighter, action);
 }
 
 function canUseAction(fighter, action) {
@@ -575,7 +676,7 @@ function getAvailableActions(fighter) {
 
 function chooseEnemyAction() {
   const affordable = getAvailableActions(state.enemy);
-  const incomingThreat = assessIncomingThreat(state.player);
+  const incomingThreat = assessIncomingThreat(state.player, state.enemy);
   const usefulDefenses = getUsefulDefenses(affordable, state.enemy, incomingThreat.maxAttack);
   const weighted = [];
   const enemyXp = state.enemy.xp;
@@ -596,9 +697,10 @@ function chooseEnemyAction() {
       weight = getDefense(state.enemy, action) >= incomingThreat.maxAttack ? 5 : 2;
     }
     if (action.kind === "attack") {
-      if (action.cost <= enemyXp && action.cost <= Math.max(1, incomingThreat.maxAttack + 2)) weight = 3;
-      if (action.cost >= BALANCE.ai.highThreatAttack && incomingThreat.maxAttack === 0) weight = 2;
-      if (action.cost === enemyXp && enemyXp >= 3) weight += 2;
+      const cost = getCost(state.enemy, action);
+      if (cost <= enemyXp && cost <= Math.max(1, incomingThreat.maxAttack + 2)) weight = 3;
+      if (cost >= BALANCE.ai.highThreatAttack && incomingThreat.maxAttack === 0) weight = 2;
+      if (cost === enemyXp && enemyXp >= 3) weight += 2;
     }
     if (action.kind === "skill") {
       weight = getSkillWeight(state.enemy, action, incomingThreat.maxAttack);
@@ -625,9 +727,9 @@ function getSkillWeight(fighter, action, maxIncomingAttack) {
   return weight;
 }
 
-function assessIncomingThreat(attacker) {
+function assessIncomingThreat(attacker, defender = null) {
   const affordableAttacks = getAvailableActions(attacker).filter((action) => action.kind === "attack");
-  const maxAttack = affordableAttacks.reduce((best, action) => Math.max(best, getAttack(attacker, action)), 0);
+  const maxAttack = affordableAttacks.reduce((best, action) => Math.max(best, getAttack(attacker, action, defender)), 0);
   return {
     canAttack: maxAttack > 0,
     maxAttack,
@@ -639,12 +741,12 @@ function getUsefulDefenses(affordableActions, defender, maxIncomingAttack) {
 
   const defenses = affordableActions
     .filter((action) => action.kind === "defense")
-    .sort((a, b) => a.cost - b.cost || getDefense(defender, a) - getDefense(defender, b));
+    .sort((a, b) => getCost(defender, a) - getCost(defender, b) || getDefense(defender, a) - getDefense(defender, b));
   const fullBlocks = defenses.filter((action) => getDefense(defender, action) >= maxIncomingAttack);
 
   if (fullBlocks.length) {
     const cheapestFullBlock = fullBlocks[0];
-    return defenses.filter((action) => action.cost === cheapestFullBlock.cost && getDefense(defender, action) >= maxIncomingAttack);
+    return defenses.filter((action) => getCost(defender, action) === getCost(defender, cheapestFullBlock) && getDefense(defender, action) >= maxIncomingAttack);
   }
 
   const bestPartialDefense = defenses.reduce((best, action) => Math.max(best, getDefense(defender, action)), 0);
@@ -655,11 +757,11 @@ function resolveRound(playerAction, enemyAction) {
   const player = state.player;
   const enemy = state.enemy;
   const logs = [];
-  const contextForPlayer = { selfAction: playerAction, opponentAction: enemyAction, notes: [] };
-  const contextForEnemy = { selfAction: enemyAction, opponentAction: playerAction, notes: [] };
+  const contextForPlayer = { selfAction: playerAction, opponentAction: enemyAction, notes: [], hit: false, damageDealt: 0 };
+  const contextForEnemy = { selfAction: enemyAction, opponentAction: playerAction, notes: [], hit: false, damageDealt: 0 };
 
-  player.xp -= playerAction.cost;
-  enemy.xp -= enemyAction.cost;
+  player.xp -= getCost(player, playerAction);
+  enemy.xp -= getCost(enemy, enemyAction);
 
   const playerXpGain = getXpGain(player, playerAction);
   const enemyXpGain = getXpGain(enemy, enemyAction);
@@ -672,16 +774,18 @@ function resolveRound(playerAction, enemyAction) {
 
   const playerDefense = getDefense(player, playerAction);
   const enemyDefense = getDefense(enemy, enemyAction);
-  const playerAttack = getAttack(player, playerAction);
-  const enemyAttack = getAttack(enemy, enemyAction);
+  const playerAttack = getAttack(player, playerAction, enemy);
+  const enemyAttack = getAttack(enemy, enemyAction, player);
 
   const damageNotes = [];
 
   if (playerAction.kind === "attack" && enemyAction.kind === "attack") {
     if (playerAttack > enemyAttack) {
-      dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 对攻压过${enemy.label} ${enemyAction.name}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
+      contextForPlayer.hit = true;
+      contextForPlayer.damageDealt = dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 对攻压过${enemy.label} ${enemyAction.name}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
     } else if (enemyAttack > playerAttack) {
-      dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 对攻压过${player.label}的 ${playerAction.name}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
+      contextForEnemy.hit = true;
+      contextForEnemy.damageDealt = dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 对攻压过${player.label}的 ${playerAction.name}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
     } else {
       logs.push({ text: `双方对攻强度同为 ${playerAttack}，互相抵消。` });
     }
@@ -690,13 +794,15 @@ function resolveRound(playerAction, enemyAction) {
     const enemyHits = enemyAction.kind === "attack" && enemyAttack > playerDefense;
 
     if (playerHits) {
-      dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 击穿${enemy.label}防御 ${formatDefense(enemyDefense)}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
+      contextForPlayer.hit = true;
+      contextForPlayer.damageDealt = dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 击穿${enemy.label}防御 ${formatDefense(enemyDefense)}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
     } else if (playerAction.kind === "attack") {
       logs.push({ text: `${player.label}用 ${playerAction.name}，强度 ${playerAttack} 未超过${enemy.label}防御 ${formatDefense(enemyDefense)}。` });
     }
 
     if (enemyHits) {
-      dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 击穿${player.label}防御 ${formatDefense(playerDefense)}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
+      contextForEnemy.hit = true;
+      contextForEnemy.damageDealt = dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 击穿${player.label}防御 ${formatDefense(playerDefense)}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
     } else if (enemyAction.kind === "attack") {
       logs.push({ text: `${enemy.label}用 ${enemyAction.name}，强度 ${enemyAttack} 未超过${player.label}防御 ${formatDefense(playerDefense)}。` });
     }
@@ -715,8 +821,8 @@ function resolveRound(playerAction, enemyAction) {
     logs.push({ text: note });
   }
 
-  const playerSummary = summarizeAction(playerAction, playerAttack, playerDefense, playerXpGain);
-  const enemySummary = summarizeAction(enemyAction, enemyAttack, enemyDefense, enemyXpGain);
+  const playerSummary = summarizeAction(player, playerAction, playerAttack, playerDefense, playerXpGain);
+  const enemySummary = summarizeAction(enemy, enemyAction, enemyAttack, enemyDefense, enemyXpGain);
 
   if (player.hp <= 0 && enemy.hp <= 0) {
     state.over = true;
@@ -735,27 +841,29 @@ function resolveRound(playerAction, enemyAction) {
 }
 
 function dealDamage(attacker, defender, action, text, logs, damageNotes, defenderCard) {
-  const damage = getDamage(attacker, defender, action);
+  const context = { action, damage: 1, notes: damageNotes };
+  const damage = getDamage(attacker, defender, action, context);
+  context.damage = damage;
   defender.hp -= damage;
   logs.push({ kind: "impact", text: text.replace("HP -1", `HP -${damage}`) });
-  const context = { action, damage, notes: damageNotes };
   runHook(attacker, "onDealDamage", attacker, defender, context);
   runHook(defender, "afterTakeDamage", defender, attacker, context);
   flash(defenderCard);
+  return damage;
 }
 
-function summarizeAction(action, attack, defense, xpGain = action.xpGain) {
+function summarizeAction(fighter, action, attack, defense, xpGain = action.xpGain) {
   if (action.kind === "charge") return `${action.name}：XP +${xpGain}，防御 ${formatDefense(defense)}`;
-  if (action.kind === "defense") return `${action.name}：花费 ${action.cost}，防御 ${formatDefense(defense)}`;
-  if (action.kind === "skill") return `${action.name}：花费 ${action.cost}，防御 ${formatDefense(defense)}`;
-  return `${action.name}：花费 ${action.cost}，强度 ${attack}`;
+  if (action.kind === "defense") return `${action.name}：花费 ${getCost(fighter, action)}，防御 ${formatDefense(defense)}`;
+  if (action.kind === "skill") return `${action.name}：花费 ${getCost(fighter, action)}，防御 ${formatDefense(defense)}`;
+  return `${action.name}：花费 ${getCost(fighter, action)}，强度 ${attack}`;
 }
 
 function describeAction(action, fighter) {
-  if (action.kind === "charge") return `花费 ${action.cost}，XP +${getXpGain(fighter, action)}，防御 ${formatDefense(getDefense(fighter, action))}`;
-  if (action.kind === "defense") return `花费 ${action.cost}，防御 ${formatDefense(getDefense(fighter, action))}`;
+  if (action.kind === "charge") return `花费 ${getCost(fighter, action)}，XP +${getXpGain(fighter, action)}，防御 ${formatDefense(getDefense(fighter, action))}`;
+  if (action.kind === "defense") return `花费 ${getCost(fighter, action)}，防御 ${formatDefense(getDefense(fighter, action))}`;
   if (action.kind === "skill") return action.text;
-  return `花费 ${action.cost}，攻击强度 ${getAttack(fighter, action)}`;
+  return `花费 ${getCost(fighter, action)}，攻击强度 ${getAttack(fighter, action)}`;
 }
 
 function getDefense(fighter, action) {
@@ -769,9 +877,17 @@ function getDefense(fighter, action) {
   return runHook(fighter, "modifyDefense", base, fighter, action);
 }
 
-function getAttack(fighter, action) {
-  const base = action.power || 0;
-  return runHook(fighter, "modifyAttack", base, fighter, action);
+function getAttack(fighter, action, defender = null) {
+  let value = action.power || 0;
+  value = runHook(fighter, "modifyAttack", value, fighter, action, defender);
+  if (defender) {
+    value = runHook(defender, "modifyIncomingAttack", value, defender, fighter, action);
+  }
+  return value;
+}
+
+function getCost(fighter, action) {
+  return runHook(fighter, "modifyCost", action.cost || 0, fighter, action);
 }
 
 function getXpGain(fighter, action) {
@@ -779,12 +895,16 @@ function getXpGain(fighter, action) {
   return runHook(fighter, "modifyXpGain", base, fighter, action);
 }
 
-function getDamage(attacker, defender, action) {
-  return runHook(attacker, "modifyDamage", 1, attacker, defender, { action });
+function getDamage(attacker, defender, action, context) {
+  return runHook(attacker, "modifyDamage", context.damage, attacker, defender, context);
 }
 
 function hasStatus(fighter, statusId) {
   return fighter.statuses.some((status) => status.id === statusId);
+}
+
+function addIceShards(fighter, amount) {
+  fighter.flags.iceShards = (fighter.flags.iceShards || 0) + amount;
 }
 
 function tickStatuses(fighter, notes) {
