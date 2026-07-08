@@ -270,7 +270,8 @@ label {
 
 .passive-panel[hidden],
 .action-group[hidden],
-.melee-panel[hidden] {
+.melee-panel[hidden],
+.melee-allocator[hidden] {
   display: none;
 }
 
@@ -390,6 +391,12 @@ label {
   gap: 10px;
 }
 
+.melee-primary,
+.melee-allocator {
+  display: grid;
+  gap: 8px;
+}
+
 .melee-target-row {
   display: grid;
   grid-template-columns: 96px minmax(0, 1fr);
@@ -405,11 +412,16 @@ label {
 
 .melee-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.melee-actions button {
+.melee-primary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.melee-actions button,
+.melee-primary button {
   min-height: 38px;
   border: 1px solid var(--line);
   background: var(--panel-2);
@@ -538,6 +550,8 @@ input {
 .action-card:hover:not(:disabled),
 .icon-button:hover,
 .log-head button:hover,
+.melee-actions button:hover:not(:disabled),
+.melee-primary button:hover:not(:disabled),
 .match-panel button:hover {
   transform: translateY(-1px);
   border-color: var(--gold);

@@ -92,19 +92,25 @@
           </div>
           <div class="melee-grid" id="meleeGrid"></div>
           <div class="melee-control" id="meleeControl">
-            <div class="mini-title">分配攻击</div>
-            <div class="melee-target-row">
-              <span id="meleeTargetALabel">目标 A</span>
-              <select id="meleeAttackA"></select>
-            </div>
-            <div class="melee-target-row">
-              <span id="meleeTargetBLabel">目标 B</span>
-              <select id="meleeAttackB"></select>
-            </div>
-            <div class="melee-actions">
+            <div class="melee-primary" id="meleePrimaryActions">
               <button id="meleeJiBtn" type="button">Ji</button>
               <button id="meleeDefBtn" type="button">小防</button>
-              <button id="meleeSubmitBtn" type="button">提交攻击</button>
+              <button id="meleeAttackModeBtn" type="button">攻击</button>
+            </div>
+            <div class="melee-allocator" id="meleeAttackAllocator" hidden>
+              <div class="mini-title">分配攻击</div>
+              <div class="melee-target-row">
+                <span id="meleeTargetALabel">目标 A</span>
+                <select id="meleeAttackA"></select>
+              </div>
+              <div class="melee-target-row">
+                <span id="meleeTargetBLabel">目标 B</span>
+                <select id="meleeAttackB"></select>
+              </div>
+              <div class="melee-actions">
+                <button id="meleeBackBtn" type="button">返回</button>
+                <button id="meleeSubmitBtn" type="button">提交攻击</button>
+              </div>
             </div>
           </div>
         </section>

@@ -529,12 +529,16 @@ const ui = {
   meleePanel: document.querySelector("#meleePanel"),
   meleeGrid: document.querySelector("#meleeGrid"),
   meleeStatus: document.querySelector("#meleeStatus"),
+  meleePrimaryActions: document.querySelector("#meleePrimaryActions"),
+  meleeAttackAllocator: document.querySelector("#meleeAttackAllocator"),
   meleeTargetALabel: document.querySelector("#meleeTargetALabel"),
   meleeTargetBLabel: document.querySelector("#meleeTargetBLabel"),
   meleeAttackA: document.querySelector("#meleeAttackA"),
   meleeAttackB: document.querySelector("#meleeAttackB"),
   meleeJiBtn: document.querySelector("#meleeJiBtn"),
   meleeDefBtn: document.querySelector("#meleeDefBtn"),
+  meleeAttackModeBtn: document.querySelector("#meleeAttackModeBtn"),
+  meleeBackBtn: document.querySelector("#meleeBackBtn"),
   meleeSubmitBtn: document.querySelector("#meleeSubmitBtn"),
 };
 
@@ -760,6 +764,7 @@ function startMeleeGame() {
     makeMeleeFighter("ai-a", "电脑A", ui.enemyHero.value, false),
     makeMeleeFighter("ai-b", "电脑B", "classic", false),
   ];
+  closeMeleeAttackAllocator();
   ui.battleLog.innerHTML = "";
   updateRoomStatus("当前：混战测试（1 真人 + 2 电脑）");
   addLog("混战开局：各自为战，攻击可拆分给多个目标。");
@@ -822,7 +827,22 @@ function renderMeleeTargets() {
   const canAct = !state.over && player.hp > 0;
   ui.meleeJiBtn.disabled = !canAct;
   ui.meleeDefBtn.disabled = !canAct;
+  ui.meleeAttackModeBtn.disabled = !canAct || !targets.length;
   ui.meleeSubmitBtn.disabled = !canAct;
+  if (!canAct || !targets.length) {
+    closeMeleeAttackAllocator();
+  }
+}
+
+function openMeleeAttackAllocator() {
+  if (state.mode !== "melee" || state.over) return;
+  const player = getMeleePlayer();
+  if (!player || player.hp <= 0 || !getAliveMeleeOpponents(player).length) return;
+  ui.meleeAttackAllocator.hidden = false;
+}
+
+function closeMeleeAttackAllocator() {
+  ui.meleeAttackAllocator.hidden = true;
 }
 
 function submitMeleeBasic(actionId) {
@@ -830,6 +850,7 @@ function submitMeleeBasic(actionId) {
   const player = getMeleePlayer();
   const action = getActionById(actionId, player);
   if (!action || !canUseAction(player, action)) return;
+  closeMeleeAttackAllocator();
   resolveMeleeRound(new Map([[player.id, { fighter: player, action, summaryAction: action }]]));
 }
 
@@ -858,6 +879,7 @@ function submitMeleeAttacks() {
     xpGain: 0,
     attacks,
   };
+  closeMeleeAttackAllocator();
   resolveMeleeRound(new Map([[player.id, { fighter: player, action, summaryAction: action }]]));
 }
 
@@ -1574,6 +1596,8 @@ ui.createRoomBtn.addEventListener("click", createOnlineRoom);
 ui.joinRoomBtn.addEventListener("click", joinOnlineRoom);
 ui.meleeJiBtn.addEventListener("click", () => submitMeleeBasic("ji"));
 ui.meleeDefBtn.addEventListener("click", () => submitMeleeBasic("def-small"));
+ui.meleeAttackModeBtn.addEventListener("click", openMeleeAttackAllocator);
+ui.meleeBackBtn.addEventListener("click", closeMeleeAttackAllocator);
 ui.meleeSubmitBtn.addEventListener("click", submitMeleeAttacks);
 ui.clearLogBtn.addEventListener("click", () => {
   ui.battleLog.innerHTML = "";
