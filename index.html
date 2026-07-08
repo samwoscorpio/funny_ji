@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>好玩的Ji</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="arena" aria-label="击防战游戏区域">
+        <header class="topbar">
+          <div>
+            <h1>好玩的Ji</h1>
+            <p>同时出手，攒气、架防、击倒对方。</p>
+          </div>
+          <div class="round-chip" aria-live="polite">第 <span id="roundNo">1</span> 回合</div>
+        </header>
+
+        <section class="fighter-grid">
+          <article class="fighter player-side" id="playerCard">
+            <div class="fighter-head">
+              <div>
+                <span class="side-label">你</span>
+                <h2 id="playerHeroName">经典武者</h2>
+              </div>
+              <div class="pose pose-left" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+            <div class="meters">
+              <div class="meter-row hp-row">
+                <span>HP</span>
+                <div class="meter hp"><i id="playerHpBar"></i></div>
+                <strong class="heart-value" id="playerHp">❤️</strong>
+              </div>
+              <div class="meter-row">
+                <span>XP</span>
+                <div class="meter xp"><i id="playerXpBar"></i></div>
+                <strong id="playerXp">0</strong>
+              </div>
+            </div>
+            <p class="hero-text" id="playerHeroText"></p>
+            <div class="passive-panel" id="playerPassivePanel" hidden>
+              <div class="mini-title">被动</div>
+              <div class="tag-list" id="playerPassives"></div>
+            </div>
+            <div class="last-action" id="playerLast">等待出手</div>
+          </article>
+
+          <div class="versus" aria-hidden="true">
+            <span></span>
+            <b>VS</b>
+            <span></span>
+          </div>
+
+          <article class="fighter enemy-side" id="enemyCard">
+            <div class="fighter-head">
+              <div>
+                <span class="side-label">电脑</span>
+                <h2 id="enemyHeroName">经典武者</h2>
+              </div>
+              <div class="pose pose-right" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+            <div class="meters">
+              <div class="meter-row hp-row">
+                <span>HP</span>
+                <div class="meter hp"><i id="enemyHpBar"></i></div>
+                <strong class="heart-value" id="enemyHp">❤️</strong>
+              </div>
+              <div class="meter-row">
+                <span>XP</span>
+                <div class="meter xp"><i id="enemyXpBar"></i></div>
+                <strong id="enemyXp">0</strong>
+              </div>
+            </div>
+            <p class="hero-text" id="enemyHeroText"></p>
+            <div class="passive-panel" id="enemyPassivePanel" hidden>
+              <div class="mini-title">被动</div>
+              <div class="tag-list" id="enemyPassives"></div>
+            </div>
+            <div class="last-action" id="enemyLast">等待出手</div>
+          </article>
+        </section>
+
+        <section class="control-panel" aria-label="操作面板">
+          <div class="setup-row">
+            <label>
+              你的英雄
+              <select id="playerHero"></select>
+            </label>
+            <label>
+              电脑英雄
+              <select id="enemyHero"></select>
+            </label>
+            <button class="icon-button" id="resetBtn" title="重新开局" aria-label="重新开局">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 4v6h6M20 20v-6h-6" />
+                <path d="M5.6 9A7 7 0 0 1 17 6.1L20 9M18.4 15A7 7 0 0 1 7 17.9L4 15" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="action-group">
+            <div class="group-title">蓄力</div>
+            <div class="action-row" id="chargeActions"></div>
+          </div>
+
+          <div class="action-group">
+            <div class="group-title">防御</div>
+            <div class="action-row" id="defenseActions"></div>
+          </div>
+
+          <div class="action-group" id="skillGroup" hidden>
+            <div class="group-title">技能</div>
+            <div class="action-row skill-row" id="skillActions"></div>
+          </div>
+
+          <div class="action-group">
+            <div class="group-title">攻击</div>
+            <div class="attack-grid" id="attackActions"></div>
+          </div>
+        </section>
+
+        <section class="log-panel" aria-label="战报">
+          <div class="log-head">
+            <h2>战报</h2>
+            <button id="clearLogBtn">清空</button>
+          </div>
+          <ol id="battleLog" aria-live="polite"></ol>
+        </section>
+      </section>
+    </main>
+    <script src="./game.js"></script>
+  </body>
+</html>
