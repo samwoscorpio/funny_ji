@@ -85,6 +85,30 @@
           </article>
         </section>
 
+        <section class="melee-panel" id="meleePanel" aria-label="混战区域" hidden>
+          <div class="melee-head">
+            <h2>混战测试</h2>
+            <span id="meleeStatus">1 真人 + 2 电脑</span>
+          </div>
+          <div class="melee-grid" id="meleeGrid"></div>
+          <div class="melee-control" id="meleeControl">
+            <div class="mini-title">分配攻击</div>
+            <div class="melee-target-row">
+              <span id="meleeTargetALabel">目标 A</span>
+              <select id="meleeAttackA"></select>
+            </div>
+            <div class="melee-target-row">
+              <span id="meleeTargetBLabel">目标 B</span>
+              <select id="meleeAttackB"></select>
+            </div>
+            <div class="melee-actions">
+              <button id="meleeJiBtn" type="button">Ji</button>
+              <button id="meleeDefBtn" type="button">小防</button>
+              <button id="meleeSubmitBtn" type="button">提交攻击</button>
+            </div>
+          </div>
+        </section>
+
         <section class="control-panel" aria-label="操作面板">
           <div class="setup-row">
             <label>
@@ -105,6 +129,7 @@
 
           <div class="match-panel" aria-label="对战房间">
             <button id="cpuModeBtn" type="button">人机</button>
+            <button id="meleeModeBtn" type="button">混战测试</button>
             <button id="createRoomBtn" type="button">创建房间</button>
             <input id="roomCodeInput" inputmode="text" maxlength="6" placeholder="房间代码" aria-label="房间代码" />
             <button id="joinRoomBtn" type="button">加入</button>

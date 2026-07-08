@@ -269,7 +269,8 @@ label {
 }
 
 .passive-panel[hidden],
-.action-group[hidden] {
+.action-group[hidden],
+.melee-panel[hidden] {
   display: none;
 }
 
@@ -320,6 +321,101 @@ label {
   width: 2px;
   height: 82px;
   background: var(--line);
+}
+
+.melee-panel {
+  display: grid;
+  gap: 12px;
+  background: rgba(27, 31, 24, 0.94);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.melee-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.melee-head h2 {
+  font-size: 18px;
+}
+
+.melee-head span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.melee-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.melee-fighter {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+  min-height: 160px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.melee-fighter.is-out {
+  opacity: 0.52;
+}
+
+.melee-fighter h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.melee-stats,
+.melee-last {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.melee-control {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.melee-target-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.melee-target-row span {
+  color: var(--muted);
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.melee-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.melee-actions button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 900;
+  cursor: pointer;
 }
 
 .control-panel {
@@ -383,7 +479,7 @@ input {
 
 .match-panel {
   display: grid;
-  grid-template-columns: auto auto minmax(90px, 1fr) auto;
+  grid-template-columns: auto auto auto minmax(90px, 1fr) auto;
   gap: 8px;
   align-items: center;
 }
@@ -575,6 +671,41 @@ input {
     gap: 8px;
   }
 
+  .melee-panel {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .melee-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .melee-fighter {
+    min-height: 0;
+    padding: 8px;
+    gap: 5px;
+  }
+
+  .melee-fighter h3 {
+    font-size: 14px;
+  }
+
+  .melee-stats,
+  .melee-last {
+    font-size: 11px;
+  }
+
+  .melee-target-row {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .melee-actions {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
   .versus {
     display: none;
   }
@@ -683,7 +814,7 @@ input {
   }
 
   .match-panel {
-    grid-template-columns: 1fr 1fr minmax(72px, 1fr) 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 6px;
   }
 

@@ -470,6 +470,9 @@ const state = {
   player: null,
   enemy: null,
   mode: "cpu",
+  melee: {
+    fighters: [],
+  },
   online: {
     roomCode: "",
     playerId: "",
@@ -483,6 +486,8 @@ const state = {
 
 const ui = {
   roundNo: document.querySelector("#roundNo"),
+  fighterGrid: document.querySelector(".fighter-grid"),
+  standardActionGroups: document.querySelectorAll(".control-panel > .action-group"),
   playerSideLabel: document.querySelector("#playerSideLabel"),
   enemySideLabel: document.querySelector("#enemySideLabel"),
   playerHero: document.querySelector("#playerHero"),
@@ -520,6 +525,17 @@ const ui = {
   roomCodeInput: document.querySelector("#roomCodeInput"),
   joinRoomBtn: document.querySelector("#joinRoomBtn"),
   roomStatus: document.querySelector("#roomStatus"),
+  meleeModeBtn: document.querySelector("#meleeModeBtn"),
+  meleePanel: document.querySelector("#meleePanel"),
+  meleeGrid: document.querySelector("#meleeGrid"),
+  meleeStatus: document.querySelector("#meleeStatus"),
+  meleeTargetALabel: document.querySelector("#meleeTargetALabel"),
+  meleeTargetBLabel: document.querySelector("#meleeTargetBLabel"),
+  meleeAttackA: document.querySelector("#meleeAttackA"),
+  meleeAttackB: document.querySelector("#meleeAttackB"),
+  meleeJiBtn: document.querySelector("#meleeJiBtn"),
+  meleeDefBtn: document.querySelector("#meleeDefBtn"),
+  meleeSubmitBtn: document.querySelector("#meleeSubmitBtn"),
 };
 
 function makeFighter(label, heroId) {
@@ -556,6 +572,7 @@ function resetGame() {
   };
   state.player = makeFighter("你", ui.playerHero.value);
   state.enemy = makeFighter("电脑", ui.enemyHero.value);
+  state.melee.fighters = [];
   ui.playerSideLabel.textContent = "你";
   ui.enemySideLabel.textContent = "电脑";
   ui.playerLast.textContent = "等待出手";
@@ -563,6 +580,8 @@ function resetGame() {
   ui.battleLog.innerHTML = "";
   addLog(`开局：你 HP=${formatHearts(state.player.hp)}，XP=${state.player.xp}；电脑 HP=${formatHearts(state.enemy.hp)}，XP=${state.enemy.xp}。`);
   updateRoomStatus("当前：人机对战");
+  ui.meleePanel.hidden = true;
+  ui.fighterGrid.hidden = false;
   render();
 }
 
@@ -621,8 +640,14 @@ function render() {
   ui.playerHero.disabled = state.mode === "online";
   ui.enemyHero.disabled = state.mode === "online";
   ui.cpuModeBtn.classList.toggle("active", state.mode === "cpu");
+  ui.meleeModeBtn.classList.toggle("active", state.mode === "melee");
   ui.createRoomBtn.classList.toggle("active", state.mode === "online" && state.online.slot === "p1");
   ui.joinRoomBtn.classList.toggle("active", state.mode === "online" && state.online.slot === "p2");
+  ui.fighterGrid.hidden = state.mode === "melee";
+  ui.meleePanel.hidden = state.mode !== "melee";
+  ui.standardActionGroups.forEach((group) => {
+    group.hidden = state.mode === "melee" || (group.id === "skillGroup" && (player.hero.activeSkills || []).length === 0);
+  });
 
   document.querySelectorAll("[data-action]").forEach((button) => {
     const action = getActionById(button.dataset.action, player);
@@ -636,6 +661,9 @@ function render() {
       || state.online.pendingActionId
       || !canUseAction(player, action);
   });
+  if (state.mode === "melee") {
+    renderMelee();
+  }
 }
 
 function renderSkillActions(fighter) {
@@ -718,6 +746,242 @@ function playRound(playerActionId) {
     state.round += 1;
   }
   render();
+}
+
+function startMeleeGame() {
+  stopPolling();
+  state.mode = "melee";
+  state.round = 1;
+  state.over = false;
+  state.player = makeFighter("你", ui.playerHero.value);
+  state.enemy = makeFighter("电脑A", ui.enemyHero.value);
+  state.melee.fighters = [
+    makeMeleeFighter("p1", "你", ui.playerHero.value, true),
+    makeMeleeFighter("ai-a", "电脑A", ui.enemyHero.value, false),
+    makeMeleeFighter("ai-b", "电脑B", "classic", false),
+  ];
+  ui.battleLog.innerHTML = "";
+  updateRoomStatus("当前：混战测试（1 真人 + 2 电脑）");
+  addLog("混战开局：各自为战，攻击可拆分给多个目标。");
+  render();
+}
+
+function makeMeleeFighter(id, label, heroId, controlled) {
+  const fighter = makeFighter(label, heroId);
+  fighter.id = id;
+  fighter.controlled = controlled;
+  fighter.lastSummary = "等待出手";
+  return fighter;
+}
+
+function renderMelee() {
+  const fighters = state.melee.fighters;
+  ui.meleeGrid.innerHTML = "";
+  for (const fighter of fighters) {
+    const card = document.createElement("article");
+    card.className = `melee-fighter${fighter.hp <= 0 ? " is-out" : ""}`;
+    const passiveText = getFighterStatusEntries(fighter).map((entry) => entry.text ? `${entry.name}:${entry.text}` : entry.name).join(" / ");
+    card.innerHTML = `
+      <h3>${fighter.label}｜${fighter.hero.name}</h3>
+      <div class="melee-stats">HP ${formatHearts(fighter.hp)} ｜ XP ${fighter.xp}</div>
+      <div class="melee-stats">${passiveText || "无被动状态"}</div>
+      <div class="melee-last">${fighter.lastSummary}</div>
+    `;
+    ui.meleeGrid.append(card);
+  }
+  renderMeleeTargets();
+  ui.meleeStatus.textContent = state.over ? "混战结束" : "1 真人 + 2 电脑";
+}
+
+function renderMeleeTargets() {
+  const player = getMeleePlayer();
+  const targets = getAliveMeleeOpponents(player);
+  const selects = [ui.meleeAttackA, ui.meleeAttackB];
+  const labels = [ui.meleeTargetALabel, ui.meleeTargetBLabel];
+  const previousValues = selects.map((select) => select.value);
+
+  selects.forEach((select, index) => {
+    const target = targets[index];
+    labels[index].textContent = target ? target.label : `目标 ${index + 1}`;
+    select.innerHTML = "";
+    select.options = [];
+    select.disabled = !target || state.over || player.hp <= 0;
+    select.dataset.targetId = target?.id || "";
+    const none = new Option("不攻击", "");
+    select.add(none);
+    for (const action of ACTIONS.filter((item) => item.kind === "attack")) {
+      const cost = getCost(player, action);
+      const option = new Option(`${action.name}（${cost}XP）`, action.id);
+      select.add(option);
+    }
+    if ([...select.options].some((option) => option.value === previousValues[index])) {
+      select.value = previousValues[index];
+    }
+  });
+
+  const canAct = !state.over && player.hp > 0;
+  ui.meleeJiBtn.disabled = !canAct;
+  ui.meleeDefBtn.disabled = !canAct;
+  ui.meleeSubmitBtn.disabled = !canAct;
+}
+
+function submitMeleeBasic(actionId) {
+  if (state.mode !== "melee" || state.over) return;
+  const player = getMeleePlayer();
+  const action = getActionById(actionId, player);
+  if (!action || !canUseAction(player, action)) return;
+  resolveMeleeRound(new Map([[player.id, { fighter: player, action, summaryAction: action }]]));
+}
+
+function submitMeleeAttacks() {
+  if (state.mode !== "melee" || state.over) return;
+  const player = getMeleePlayer();
+  if (player.hp <= 0) return;
+
+  const attacks = [ui.meleeAttackA, ui.meleeAttackB]
+    .map((select) => ({ targetId: select.dataset.targetId, action: getActionById(select.value, player) }))
+    .filter((entry) => entry.targetId && entry.action);
+  if (!attacks.length) return;
+
+  const totalCost = attacks.reduce((sum, entry) => sum + getCost(player, entry.action), 0);
+  if (totalCost > player.xp) {
+    addLog(`混战攻击分配需要 ${totalCost} XP，你当前只有 ${player.xp} XP。`);
+    return;
+  }
+
+  const action = {
+    id: "melee-multiattack",
+    kind: "multiattack",
+    name: "分配攻击",
+    cost: totalCost,
+    defense: 0,
+    xpGain: 0,
+    attacks,
+  };
+  resolveMeleeRound(new Map([[player.id, { fighter: player, action, summaryAction: action }]]));
+}
+
+function resolveMeleeRound(playerPlans) {
+  const fighters = state.melee.fighters.filter((fighter) => fighter.hp > 0);
+  const plans = new Map(playerPlans);
+  const logs = [];
+  const notes = [];
+
+  for (const fighter of fighters) {
+    if (!plans.has(fighter.id)) {
+      const action = chooseMeleeAiAction(fighter);
+      plans.set(fighter.id, { fighter, action, summaryAction: action });
+    }
+  }
+
+  for (const plan of plans.values()) {
+    plan.context = { selfAction: plan.action, opponentAction: ACTION_BY_ID.ji, notes: [], hit: false, damageDealt: 0 };
+    plan.fighter.xp -= getMeleeActionCost(plan.fighter, plan.action);
+    plan.fighter.xp += getXpGain(plan.fighter, plan.action);
+    applyPreDamageEffects(plan.fighter, plan.action, logs);
+  }
+
+  const defenses = new Map();
+  for (const plan of plans.values()) {
+    defenses.set(plan.fighter.id, getDefense(plan.fighter, plan.action));
+  }
+
+  for (const intent of getMeleeAttackIntents(plans)) {
+    const target = state.melee.fighters.find((fighter) => fighter.id === intent.targetId);
+    if (!target || target.hp <= 0 || intent.source.hp <= 0) continue;
+    const defense = defenses.get(target.id) || 0;
+    const attack = getAttack(intent.source, intent.action, target);
+    if (attack > defense) {
+      const sourcePlan = plans.get(intent.source.id);
+      sourcePlan.context.hit = true;
+      sourcePlan.context.damageDealt += dealDamage(intent.source, target, intent.action, `${intent.source.label}用 ${intent.action.name} 攻击${target.label}，击穿防御 ${formatDefense(defense)}，${target.label} HP -1。`, logs, notes, null);
+    } else {
+      logs.push({ text: `${intent.source.label}用 ${intent.action.name} 攻击${target.label}，强度 ${attack} 未超过防御 ${formatDefense(defense)}。` });
+    }
+  }
+
+  for (const plan of plans.values()) {
+    runHook(plan.fighter, "afterRound", plan.fighter, null, plan.context);
+    tickStatuses(plan.fighter, plan.context.notes);
+    plan.fighter.lastSummary = summarizeMeleeAction(plan.fighter, plan.action, defenses.get(plan.fighter.id) || 0);
+  }
+
+  for (const note of [...notes, ...Array.from(plans.values()).flatMap((plan) => plan.context.notes)]) {
+    logs.push({ text: note });
+  }
+
+  updateMeleeOutcome(logs);
+  for (const item of logs) addLog(item.text, item.kind);
+  if (!state.over) state.round += 1;
+  render();
+}
+
+function getMeleeAttackIntents(plans) {
+  const intents = [];
+  for (const plan of plans.values()) {
+    if (plan.action.kind === "multiattack") {
+      for (const attack of plan.action.attacks) {
+        intents.push({ source: plan.fighter, targetId: attack.targetId, action: attack.action });
+      }
+    } else if (plan.action.kind === "attack" && plan.action.targetId) {
+      intents.push({ source: plan.fighter, targetId: plan.action.targetId, action: plan.action });
+    }
+  }
+  return intents;
+}
+
+function chooseMeleeAiAction(fighter) {
+  const targets = state.melee.fighters.filter((target) => target.id !== fighter.id && target.hp > 0);
+  const target = targets[Math.floor(Math.random() * targets.length)];
+  if (!target) return ACTION_BY_ID.ji;
+  const affordableAttacks = getAvailableActions(fighter)
+    .filter((action) => action.kind === "attack")
+    .sort((a, b) => getCost(fighter, b) - getCost(fighter, a));
+  if (affordableAttacks.length && Math.random() > 0.35) {
+    const action = { ...affordableAttacks[0], targetId: target.id };
+    return action;
+  }
+  if (fighter.xp > 0 && Math.random() > 0.55) return ACTION_BY_ID["def-small"];
+  return ACTION_BY_ID.ji;
+}
+
+function getMeleeActionCost(fighter, action) {
+  if (action.kind === "multiattack") return action.cost;
+  return getCost(fighter, action);
+}
+
+function summarizeMeleeAction(fighter, action, defense) {
+  if (action.kind === "multiattack") {
+    const parts = action.attacks.map((attack) => `${attack.action.name}->${getMeleeFighterLabel(attack.targetId)}`);
+    return `分配攻击：${parts.join("，")}（花费 ${action.cost}）`;
+  }
+  if (action.kind === "charge") return `${action.name}：XP +${getXpGain(fighter, action)}`;
+  if (action.kind === "defense") return `${action.name}：防御 ${formatDefense(defense)}`;
+  return `${action.name}`;
+}
+
+function updateMeleeOutcome(logs) {
+  const alive = state.melee.fighters.filter((fighter) => fighter.hp > 0);
+  const player = getMeleePlayer();
+  if (player.hp <= 0) {
+    state.over = true;
+    logs.push({ kind: "win", text: "你在混战中被击倒。" });
+  } else if (alive.length <= 1) {
+    state.over = true;
+    logs.push({ kind: "win", text: `${alive[0]?.label || "无人"}成为混战胜者。` });
+  }
+}
+
+function getMeleePlayer() {
+  return state.melee.fighters.find((fighter) => fighter.controlled) || state.melee.fighters[0];
+}
+
+function getAliveMeleeOpponents(fighter) {
+  return state.melee.fighters.filter((target) => target.id !== fighter.id && target.hp > 0);
+}
+
+function getMeleeFighterLabel(fighterId) {
+  return state.melee.fighters.find((fighter) => fighter.id === fighterId)?.label || "目标";
 }
 
 function canAfford(fighter, action) {
@@ -920,7 +1184,7 @@ function dealDamage(attacker, defender, action, text, logs, damageNotes, defende
   logs.push({ kind: "impact", text: text.replace("HP -1", `HP -${damage}`) });
   runHook(attacker, "onDealDamage", attacker, defender, context);
   runHook(defender, "afterTakeDamage", defender, attacker, context);
-  flash(defenderCard);
+  if (defenderCard) flash(defenderCard);
   return damage;
 }
 
@@ -1305,8 +1569,12 @@ async function apiRequest(path, payload) {
 
 ui.resetBtn.addEventListener("click", resetGame);
 ui.cpuModeBtn.addEventListener("click", resetGame);
+ui.meleeModeBtn.addEventListener("click", startMeleeGame);
 ui.createRoomBtn.addEventListener("click", createOnlineRoom);
 ui.joinRoomBtn.addEventListener("click", joinOnlineRoom);
+ui.meleeJiBtn.addEventListener("click", () => submitMeleeBasic("ji"));
+ui.meleeDefBtn.addEventListener("click", () => submitMeleeBasic("def-small"));
+ui.meleeSubmitBtn.addEventListener("click", submitMeleeAttacks);
 ui.clearLogBtn.addEventListener("click", () => {
   ui.battleLog.innerHTML = "";
 });
