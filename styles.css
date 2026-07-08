@@ -30,7 +30,8 @@ body {
 }
 
 button,
-select {
+select,
+input {
   font: inherit;
 }
 
@@ -340,7 +341,8 @@ label {
   font-weight: 800;
 }
 
-select {
+select,
+input {
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--line);
@@ -352,6 +354,7 @@ select {
 
 .icon-button,
 .log-head button,
+.match-panel button,
 .action-card {
   border: 1px solid var(--line);
   background: var(--panel-2);
@@ -376,6 +379,35 @@ select {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.match-panel {
+  display: grid;
+  grid-template-columns: auto auto minmax(90px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.match-panel button {
+  min-height: 38px;
+  padding: 0 12px;
+  font-weight: 900;
+}
+
+.match-panel button.active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.room-status {
+  grid-column: 1 / -1;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--muted);
+  min-height: 34px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .group-title {
@@ -409,7 +441,8 @@ select {
 
 .action-card:hover:not(:disabled),
 .icon-button:hover,
-.log-head button:hover {
+.log-head button:hover,
+.match-panel button:hover {
   transform: translateY(-1px);
   border-color: var(--gold);
 }
@@ -647,6 +680,24 @@ select {
     min-height: 34px;
     padding: 0 8px;
     font-size: 13px;
+  }
+
+  .match-panel {
+    grid-template-columns: 1fr 1fr minmax(72px, 1fr) 1fr;
+    gap: 6px;
+  }
+
+  .match-panel button,
+  .match-panel input {
+    min-height: 34px;
+    padding: 0 7px;
+    font-size: 12px;
+  }
+
+  .room-status {
+    min-height: 28px;
+    padding: 6px 8px;
+    font-size: 11px;
   }
 
   .icon-button {
