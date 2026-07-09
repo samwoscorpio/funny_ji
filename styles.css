@@ -95,6 +95,18 @@ h1 {
   transition: transform 120ms ease, border-color 120ms ease;
 }
 
+.top-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.history-button {
+  color: var(--blue);
+}
+
 .topbar p,
 .hero-text,
 .side-label,
@@ -511,7 +523,7 @@ label {
 
 .setup-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 46px;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1fr) minmax(0, 1fr) 46px;
   gap: 12px;
 }
 
@@ -810,8 +822,88 @@ input {
   width: min(680px, 100%);
 }
 
+.history-detail {
+  width: min(760px, 100%);
+}
+
 .manual-body p {
   line-height: 1.55;
+}
+
+.history-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.history-stat,
+.history-card {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.history-stat {
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.history-stat span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.history-stat strong {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.history-card {
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.history-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.history-result {
+  color: var(--gold);
+  font-weight: 1000;
+}
+
+.history-card time,
+.history-card p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.history-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.history-actions button {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--red);
+  padding: 0 12px;
+  font-weight: 900;
+  cursor: pointer;
 }
 
 .hero-detail-body {
@@ -897,6 +989,10 @@ input {
     min-height: 30px;
     padding: 0 9px;
     font-size: 12px;
+  }
+
+  .top-actions {
+    gap: 6px;
   }
 
   .topbar p {
@@ -1047,6 +1143,10 @@ input {
     order: 20;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 38px;
     gap: 8px;
+  }
+
+  .player-name-field {
+    grid-column: 1 / -1;
   }
 
   .control-panel {
@@ -1203,6 +1303,15 @@ input {
 
   .hero-detail h2 {
     font-size: 20px;
+  }
+
+  .history-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .history-card-head {
+    display: grid;
+    gap: 3px;
   }
 }
 

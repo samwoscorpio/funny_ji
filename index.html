@@ -17,7 +17,10 @@
             </div>
             <p>同时出手，攒气、架防、击倒对方。</p>
           </div>
-          <div class="round-chip" aria-live="polite">第 <span id="roundNo">1</span> 回合</div>
+          <div class="top-actions">
+            <button class="manual-button history-button" id="historyBtn" type="button">历史对局</button>
+            <div class="round-chip" aria-live="polite">第 <span id="roundNo">1</span> 回合</div>
+          </div>
         </header>
 
         <section class="fighter-grid">
@@ -116,6 +119,10 @@
 
         <section class="control-panel" aria-label="操作面板">
           <div class="setup-row">
+            <label class="player-name-field">
+              玩家昵称
+              <input id="playerName" type="text" maxlength="16" autocomplete="nickname" placeholder="玩家" />
+            </label>
             <label>
               你的英雄
               <select id="playerHero"></select>
@@ -240,6 +247,23 @@
             <h3>多人混战</h3>
             <p>混战中可以把攻击拆给不同目标。单点防御只保护对应目标，不会挡住第三方攻击。</p>
           </section>
+        </div>
+      </section>
+    </div>
+    <div class="hero-detail-backdrop" id="historyDetail" hidden>
+      <section class="hero-detail history-detail" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+        <button class="detail-close" id="historyClose" type="button" aria-label="关闭">×</button>
+        <div class="hero-detail-head">
+          <div class="detail-avatar">史</div>
+          <div>
+            <h2 id="historyTitle">历史对局</h2>
+            <p id="historyMeta">当前用户的对局记录</p>
+          </div>
+        </div>
+        <div class="history-summary" id="historySummary"></div>
+        <div class="history-list" id="historyList"></div>
+        <div class="history-actions">
+          <button id="clearHistoryBtn" type="button">清空当前用户记录</button>
         </div>
       </section>
     </div>

@@ -504,9 +504,17 @@ const HERO_AVATARS = {
   vaingloriousWarrior: "./pic/vangloriouswarrior.png",
 };
 
+const STORAGE_KEYS = {
+  playerName: "clapDuel.playerName",
+  matchHistory: "clapDuel.matchHistory.v1",
+};
+const DEFAULT_PLAYER_NAME = "玩家";
+const MAX_HISTORY_RECORDS = 200;
+
 const state = {
   round: 1,
   over: false,
+  matchRecorded: false,
   player: null,
   enemy: null,
   mode: "cpu",
@@ -528,10 +536,12 @@ const state = {
 const ui = {
   roundNo: document.querySelector("#roundNo"),
   manualBtn: document.querySelector("#manualBtn"),
+  historyBtn: document.querySelector("#historyBtn"),
   fighterGrid: document.querySelector(".fighter-grid"),
   standardActionGroups: document.querySelectorAll(".control-panel > .action-group"),
   playerSideLabel: document.querySelector("#playerSideLabel"),
   enemySideLabel: document.querySelector("#enemySideLabel"),
+  playerName: document.querySelector("#playerName"),
   playerHero: document.querySelector("#playerHero"),
   enemyHero: document.querySelector("#enemyHero"),
   playerHeroName: document.querySelector("#playerHeroName"),
@@ -596,6 +606,12 @@ const ui = {
   heroDetailBody: document.querySelector("#heroDetailBody"),
   manualDetail: document.querySelector("#manualDetail"),
   manualClose: document.querySelector("#manualClose"),
+  historyDetail: document.querySelector("#historyDetail"),
+  historyClose: document.querySelector("#historyClose"),
+  historyMeta: document.querySelector("#historyMeta"),
+  historySummary: document.querySelector("#historySummary"),
+  historyList: document.querySelector("#historyList"),
+  clearHistoryBtn: document.querySelector("#clearHistoryBtn"),
 };
 
 function makeFighter(label, heroId) {
@@ -616,9 +632,38 @@ function makeFighter(label, heroId) {
   return fighter;
 }
 
+function getCurrentPlayerName() {
+  return normalizePlayerName(ui.playerName?.value || readStorage(STORAGE_KEYS.playerName) || DEFAULT_PLAYER_NAME);
+}
+
+function normalizePlayerName(value) {
+  const name = String(value || "").trim().replace(/\s+/g, " ");
+  return name.slice(0, 16) || DEFAULT_PLAYER_NAME;
+}
+
+function initializePlayerName() {
+  ui.playerName.value = getCurrentPlayerName();
+}
+
+function savePlayerName() {
+  const name = getCurrentPlayerName();
+  ui.playerName.value = name;
+  writeStorage(STORAGE_KEYS.playerName, name);
+  if (state.player && state.mode !== "melee") {
+    state.player.label = name;
+    ui.playerSideLabel.textContent = name;
+  }
+  if (state.mode === "melee") {
+    const player = getMeleePlayer();
+    if (player) player.label = name;
+  }
+  render();
+}
+
 function resetGame() {
   state.round = 1;
   state.over = false;
+  state.matchRecorded = false;
   state.mode = "cpu";
   state.pendingEndChoice = null;
   stopPolling();
@@ -631,10 +676,11 @@ function resetGame() {
     appliedRounds: new Set(),
     pollTimer: null,
   };
-  state.player = makeFighter("你", ui.playerHero.value);
+  const playerName = getCurrentPlayerName();
+  state.player = makeFighter(playerName, ui.playerHero.value);
   state.enemy = makeFighter("电脑", ui.enemyHero.value);
   state.melee.fighters = [];
-  ui.playerSideLabel.textContent = "你";
+  ui.playerSideLabel.textContent = playerName;
   ui.enemySideLabel.textContent = "电脑";
   ui.playerLast.textContent = "等待出手";
   ui.enemyLast.textContent = "等待出手";
@@ -867,6 +913,187 @@ function closeManualDetail() {
   ui.manualDetail.hidden = true;
 }
 
+function openHistoryDetail() {
+  renderHistoryDetail();
+  ui.historyDetail.hidden = false;
+}
+
+function closeHistoryDetail() {
+  ui.historyDetail.hidden = true;
+}
+
+function renderHistoryDetail() {
+  const playerName = getCurrentPlayerName();
+  const records = readMatchHistory().filter((record) => record.playerName === playerName);
+  const wins = records.filter((record) => record.result === "win").length;
+  const losses = records.filter((record) => record.result === "loss").length;
+  const draws = records.filter((record) => record.result === "draw").length;
+  ui.historyMeta.textContent = `${playerName} 的历史对局`;
+  ui.historySummary.innerHTML = "";
+  ui.historyList.innerHTML = "";
+
+  for (const stat of [
+    ["总局数", records.length],
+    ["胜利", wins],
+    ["失败", losses],
+    ["平局", draws],
+  ]) {
+    const card = document.createElement("div");
+    card.className = "history-stat";
+    const label = document.createElement("span");
+    label.textContent = stat[0];
+    const value = document.createElement("strong");
+    value.textContent = stat[1];
+    card.append(label, value);
+    ui.historySummary.append(card);
+  }
+
+  if (!records.length) {
+    const empty = document.createElement("article");
+    empty.className = "history-card";
+    const text = document.createElement("p");
+    text.textContent = "当前用户还没有完成的对局。";
+    empty.append(text);
+    ui.historyList.append(empty);
+    return;
+  }
+
+  for (const record of records) {
+    ui.historyList.append(renderHistoryCard(record));
+  }
+}
+
+function renderHistoryCard(record) {
+  const card = document.createElement("article");
+  card.className = "history-card";
+
+  const head = document.createElement("div");
+  head.className = "history-card-head";
+  const result = document.createElement("div");
+  result.className = "history-result";
+  result.textContent = `${formatMatchResult(record.result)} ｜ ${record.rounds} 回合`;
+  const time = document.createElement("time");
+  time.dateTime = record.finishedAt;
+  time.textContent = formatHistoryTime(record.finishedAt);
+  head.append(result, time);
+
+  const heroes = document.createElement("p");
+  heroes.textContent = `英雄：${record.playerHero} vs ${record.opponentHeroes.join("，")}`;
+  const mode = document.createElement("p");
+  mode.textContent = `模式：${record.modeLabel}`;
+  card.append(head, heroes, mode);
+  return card;
+}
+
+function recordCompletedMatch() {
+  if (!state.over || state.matchRecorded) return;
+  const record = buildMatchRecord();
+  if (!record) return;
+  const records = readMatchHistory();
+  writeMatchHistory([record, ...records].slice(0, MAX_HISTORY_RECORDS));
+  state.matchRecorded = true;
+}
+
+function buildMatchRecord() {
+  const playerName = getCurrentPlayerName();
+  const base = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    playerName,
+    finishedAt: new Date().toISOString(),
+    rounds: state.round,
+  };
+
+  if (state.mode === "melee") {
+    const player = getMeleePlayer();
+    if (!player) return null;
+    const alive = state.melee.fighters.filter((fighter) => fighter.hp > 0);
+    const winner = alive.length === 1 ? alive[0] : null;
+    return {
+      ...base,
+      mode: "melee",
+      modeLabel: "混战测试",
+      playerHero: getHeroDisplayName(player.hero),
+      opponentHeroes: state.melee.fighters
+        .filter((fighter) => fighter.id !== player.id)
+        .map((fighter) => `${fighter.label}：${getHeroDisplayName(fighter.hero)}`),
+      result: player.hp <= 0 ? "loss" : winner === player ? "win" : "draw",
+    };
+  }
+
+  return {
+    ...base,
+    mode: state.mode,
+    modeLabel: state.mode === "online" ? "在线 1v1" : "人机对战",
+    playerHero: getHeroDisplayName(state.player.hero),
+    opponentHeroes: [`${state.enemy.label}：${getHeroDisplayName(state.enemy.hero)}`],
+    result: getDuelResult(),
+  };
+}
+
+function getDuelResult() {
+  if (state.player.hp <= 0 && state.enemy.hp <= 0) return "draw";
+  if (state.enemy.hp <= 0) return "win";
+  if (state.player.hp <= 0) return "loss";
+  return "draw";
+}
+
+function readMatchHistory() {
+  try {
+    const raw = readStorage(STORAGE_KEYS.matchHistory);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function writeMatchHistory(records) {
+  writeStorage(STORAGE_KEYS.matchHistory, JSON.stringify(records));
+}
+
+function clearCurrentPlayerHistory() {
+  const playerName = getCurrentPlayerName();
+  const confirmed = typeof window.confirm === "function"
+    ? window.confirm(`清空 ${playerName} 的历史对局？`)
+    : true;
+  if (!confirmed) return;
+  writeMatchHistory(readMatchHistory().filter((record) => record.playerName !== playerName));
+  renderHistoryDetail();
+}
+
+function readStorage(key) {
+  try {
+    return window.localStorage?.getItem(key) || "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function writeStorage(key, value) {
+  try {
+    window.localStorage?.setItem(key, value);
+  } catch (error) {
+    // 本地文件或隐私模式可能禁用 localStorage，游戏本体仍可继续。
+  }
+}
+
+function formatMatchResult(result) {
+  if (result === "win") return "胜利";
+  if (result === "loss") return "失败";
+  return "平局";
+}
+
+function formatHistoryTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "未知时间";
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function appendDetailSection(title, entries, emptyText) {
   const section = document.createElement("section");
   section.className = "detail-section";
@@ -955,6 +1182,7 @@ function finishRound(report) {
     return;
   }
 
+  recordCompletedMatch();
   if (!state.over) {
     state.round += 1;
   }
@@ -966,11 +1194,13 @@ function startMeleeGame() {
   state.mode = "melee";
   state.round = 1;
   state.over = false;
+  state.matchRecorded = false;
   state.pendingEndChoice = null;
-  state.player = makeFighter("你", ui.playerHero.value);
+  const playerName = getCurrentPlayerName();
+  state.player = makeFighter(playerName, ui.playerHero.value);
   state.enemy = makeFighter("电脑A", ui.enemyHero.value);
   state.melee.fighters = [
-    makeMeleeFighter("p1", "你", ui.playerHero.value, true),
+    makeMeleeFighter("p1", playerName, ui.playerHero.value, true),
     makeMeleeFighter("ai-a", "电脑A", ui.enemyHero.value, false),
     makeMeleeFighter("ai-b", "电脑B", "classic", false),
   ];
@@ -1152,6 +1382,7 @@ function resolveMeleeRound(playerPlans) {
 
   updateMeleeOutcome(logs);
   for (const item of logs) addLog(item.text, item.kind);
+  recordCompletedMatch();
   if (!state.over) state.round += 1;
   render();
 }
@@ -1701,16 +1932,18 @@ async function createOnlineRoom() {
   try {
     const data = await apiRequest("/api/rooms", { heroId });
     enterOnlineRoom(data);
-    state.player = makeFighter("你", heroId);
+    const playerName = getCurrentPlayerName();
+    state.player = makeFighter(playerName, heroId);
     state.enemy = makeFighter("对手", "classic");
     state.round = 1;
     state.over = false;
+    state.matchRecorded = false;
     state.online.initialized = false;
     state.pendingEndChoice = null;
     ui.playerLast.textContent = "等待出手";
     ui.enemyLast.textContent = "等待对手加入";
     ui.battleLog.innerHTML = "";
-    ui.playerSideLabel.textContent = "你";
+    ui.playerSideLabel.textContent = playerName;
     ui.enemySideLabel.textContent = "对手";
     addLog(`房间 ${data.code} 已创建，等待对手加入。`);
     updateRoomStatus(`房间 ${data.code}：等待对手加入。把房间代码发给对方。`);
@@ -1823,15 +2056,17 @@ function startOnlineMatch(room) {
   const opponentSlot = getOpponentSlot(selfSlot);
   const selfHeroId = room.players[selfSlot].heroId;
   const opponentHeroId = room.players[opponentSlot].heroId;
-  state.player = makeFighter("你", selfHeroId);
+  const playerName = getCurrentPlayerName();
+  state.player = makeFighter(playerName, selfHeroId);
   state.enemy = makeFighter("对手", opponentHeroId);
   state.round = room.round;
   state.over = false;
+  state.matchRecorded = false;
   state.online.initialized = true;
   state.online.pendingActionId = "";
   ui.playerHero.value = selfHeroId;
   ui.enemyHero.value = opponentHeroId;
-  ui.playerSideLabel.textContent = "你";
+  ui.playerSideLabel.textContent = playerName;
   ui.enemySideLabel.textContent = "对手";
   ui.playerLast.textContent = "等待出手";
   ui.enemyLast.textContent = "等待出手";
@@ -1864,6 +2099,7 @@ async function applyOnlineResult(result) {
   if (!state.over) {
     state.round = result.round + 1;
   }
+  recordCompletedMatch();
   render();
 
   try {
@@ -1927,6 +2163,12 @@ ui.manualClose.addEventListener("click", closeManualDetail);
 ui.manualDetail.addEventListener("click", (event) => {
   if (event.target === ui.manualDetail) closeManualDetail();
 });
+ui.historyBtn.addEventListener("click", openHistoryDetail);
+ui.historyClose.addEventListener("click", closeHistoryDetail);
+ui.historyDetail.addEventListener("click", (event) => {
+  if (event.target === ui.historyDetail) closeHistoryDetail();
+});
+ui.clearHistoryBtn.addEventListener("click", clearCurrentPlayerHistory);
 ui.playerAvatar.addEventListener("click", () => openHeroDetail(state.player));
 ui.enemyAvatar.addEventListener("click", () => openHeroDetail(state.enemy));
 ui.heroDetailClose.addEventListener("click", closeHeroDetail);
@@ -1938,6 +2180,7 @@ if (document.addEventListener) {
     if (event.key === "Escape") {
       closeHeroDetail();
       closeManualDetail();
+      closeHistoryDetail();
     }
   });
 }
@@ -1950,7 +2193,10 @@ ui.playerHero.addEventListener("change", () => {
 ui.enemyHero.addEventListener("change", () => {
   if (state.mode === "cpu") resetGame();
 });
+ui.playerName.addEventListener("change", savePlayerName);
+ui.playerName.addEventListener("blur", savePlayerName);
 
 populateHeroes();
+initializePlayerName();
 renderActions();
 resetGame();
