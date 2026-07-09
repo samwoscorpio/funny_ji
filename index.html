@@ -11,7 +11,10 @@
       <section class="arena" aria-label="击防战游戏区域">
         <header class="topbar">
           <div>
-            <h1>好玩的Ji</h1>
+            <div class="title-row">
+              <h1>好玩的Ji</h1>
+              <button class="manual-button" id="manualBtn" type="button">说明书</button>
+            </div>
             <p>同时出手，攒气、架防、击倒对方。</p>
           </div>
           <div class="round-chip" aria-live="polite">第 <span id="roundNo">1</span> 回合</div>
@@ -192,6 +195,52 @@
           </div>
         </div>
         <div class="hero-detail-body" id="heroDetailBody"></div>
+      </section>
+    </div>
+    <div class="hero-detail-backdrop" id="manualDetail" hidden>
+      <section class="hero-detail manual-detail" role="dialog" aria-modal="true" aria-labelledby="manualTitle">
+        <button class="detail-close" id="manualClose" type="button" aria-label="关闭">×</button>
+        <div class="hero-detail-head">
+          <div class="detail-avatar">Ji</div>
+          <div>
+            <h2 id="manualTitle">好玩的Ji 说明书</h2>
+            <p>回合制拍手对战，先攒气，再用防御、攻击和英雄机制压过对手。</p>
+          </div>
+        </div>
+        <div class="hero-detail-body manual-body">
+          <section class="detail-section">
+            <h3>基础目标</h3>
+            <p>每个玩家有 HP 和 XP。HP 归零即被击倒；XP 用来支付防御、攻击和技能费用。</p>
+          </section>
+          <section class="detail-section">
+            <h3>每回合流程</h3>
+            <ul class="detail-list">
+              <li><strong>开始前</strong><span>预留给持续效果、回合前触发效果。</span></li>
+              <li><strong>进行时</strong><span>双方同时选择动作，并结算蓄力、防御、攻击、技能。</span></li>
+              <li><strong>结束后</strong><span>结算追索等结束阶段效果，再进入下一回合。</span></li>
+            </ul>
+          </section>
+          <section class="detail-section">
+            <h3>动作</h3>
+            <ul class="detail-list">
+              <li><strong>Ji</strong><span>不花 XP，本回合获得 XP，防御为 0。</span></li>
+              <li><strong>防御</strong><span>主动出防是全局防御，会抵挡所有来源的攻击。</span></li>
+              <li><strong>攻击</strong><span>攻击需要支付 XP；攻击强度大于目标防御时造成伤害。攻击也会提供对该目标的单点防御。</span></li>
+              <li><strong>技能</strong><span>英雄技能按技能说明结算，有些技能会附带防御、治疗、吸血、结束阶段选择等效果。</span></li>
+            </ul>
+          </section>
+          <section class="detail-section">
+            <h3>防御类型</h3>
+            <ul class="detail-list">
+              <li><strong>全局防御</strong><span>来自主动出防、无敌、部分技能，可抵挡所有攻击者。</span></li>
+              <li><strong>单点防御</strong><span>只针对一个目标生效，例如攻击目标时获得同强度单点防御，占星家的汲取也会对目标附带小防。</span></li>
+            </ul>
+          </section>
+          <section class="detail-section">
+            <h3>多人混战</h3>
+            <p>混战中可以把攻击拆给不同目标。单点防御只保护对应目标，不会挡住第三方攻击。</p>
+          </section>
+        </div>
       </section>
     </div>
     <script src="./game.js"></script>

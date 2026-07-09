@@ -77,6 +77,24 @@ h1 {
   letter-spacing: 0;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.manual-button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--gold);
+  padding: 0 12px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
 .topbar p,
 .hero-text,
 .side-label,
@@ -294,6 +312,23 @@ label {
   min-height: 44px;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.hero-text strong,
+.hero-summary strong {
+  color: var(--text);
+  font-weight: 1000;
+}
+
+.hero-text .rule-line,
+.hero-summary .rule-line {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.hero-summary {
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 .passive-panel {
@@ -602,6 +637,7 @@ input {
 .action-card:hover:not(:disabled),
 .icon-button:hover,
 .log-head button:hover,
+.manual-button:hover,
 .melee-actions button:hover:not(:disabled),
 .melee-primary button:hover:not(:disabled),
 .match-panel button:hover {
@@ -766,6 +802,14 @@ input {
   line-height: 1.5;
 }
 
+.manual-detail {
+  width: min(680px, 100%);
+}
+
+.manual-body p {
+  line-height: 1.55;
+}
+
 .hero-detail-body {
   display: grid;
   gap: 12px;
@@ -839,6 +883,16 @@ input {
 
   h1 {
     font-size: 24px;
+  }
+
+  .title-row {
+    gap: 8px;
+  }
+
+  .manual-button {
+    min-height: 30px;
+    padding: 0 9px;
+    font-size: 12px;
   }
 
   .topbar p {

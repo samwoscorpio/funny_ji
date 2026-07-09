@@ -482,6 +482,8 @@ const HERO_AVATARS = {
   assassin: "./pic/assassin.png",
   astrologer: "./pic/astrologer.png",
   iceSorcerer: "./pic/icesorcerer.png",
+  priest: "./pic/priest.png",
+  vaingloriousWarrior: "./pic/vangloriouswarrior.png",
 };
 
 const state = {
@@ -507,6 +509,7 @@ const state = {
 
 const ui = {
   roundNo: document.querySelector("#roundNo"),
+  manualBtn: document.querySelector("#manualBtn"),
   fighterGrid: document.querySelector(".fighter-grid"),
   standardActionGroups: document.querySelectorAll(".control-panel > .action-group"),
   playerSideLabel: document.querySelector("#playerSideLabel"),
@@ -573,6 +576,8 @@ const ui = {
   heroDetailTitle: document.querySelector("#heroDetailTitle"),
   heroDetailMeta: document.querySelector("#heroDetailMeta"),
   heroDetailBody: document.querySelector("#heroDetailBody"),
+  manualDetail: document.querySelector("#manualDetail"),
+  manualClose: document.querySelector("#manualClose"),
 };
 
 function makeFighter(label, heroId) {
@@ -662,8 +667,8 @@ function render() {
   ui.enemyHeroName.textContent = getHeroDisplayName(enemy.hero);
   renderHeroAvatar(ui.playerAvatar, player.hero);
   renderHeroAvatar(ui.enemyAvatar, enemy.hero);
-  ui.playerHeroText.textContent = player.hero.description;
-  ui.enemyHeroText.textContent = enemy.hero.description;
+  renderHeroSummary(ui.playerHeroText, player.hero);
+  renderHeroSummary(ui.enemyHeroText, enemy.hero);
   renderSkillActions(player);
   renderPassivePanel(player, ui.playerPassivePanel, ui.playerPassives);
   renderPassivePanel(enemy, ui.enemyPassivePanel, ui.enemyPassives);
@@ -754,6 +759,32 @@ function getHeroDisplayName(hero) {
   return hero.name.replace(/\s+[A-Za-z].*$/, "");
 }
 
+function renderHeroSummary(container, hero) {
+  container.innerHTML = "";
+  for (const entry of getHeroRuleEntries(hero)) {
+    const line = document.createElement("span");
+    line.className = "rule-line";
+    const name = document.createElement("strong");
+    name.textContent = `${entry.name}：`;
+    const text = document.createElement("span");
+    text.textContent = entry.text;
+    line.append(name, text);
+    container.append(line);
+  }
+}
+
+function getHeroRuleEntries(hero) {
+  const entries = [];
+  if (hero.description) entries.push({ name: "概述", text: hero.description });
+  for (const passive of hero.passives || []) {
+    entries.push({ name: passive.name, text: passive.text || "被动效果" });
+  }
+  for (const skill of hero.activeSkills || []) {
+    entries.push({ name: skill.name, text: skill.text || "主动技能" });
+  }
+  return entries;
+}
+
 function renderHeroAvatar(container, hero) {
   container.innerHTML = "";
   container.title = `查看${getHeroDisplayName(hero)}技能`;
@@ -793,8 +824,9 @@ function openHeroDetail(fighter) {
   ui.heroDetailBody.innerHTML = "";
   renderHeroAvatar(ui.heroDetailAvatar, hero);
 
-  const summary = document.createElement("p");
-  summary.textContent = hero.description;
+  const summary = document.createElement("div");
+  summary.className = "hero-summary";
+  renderHeroSummary(summary, hero);
   ui.heroDetailBody.append(summary);
 
   appendDetailSection("被动", hero.passives || [], "无被动");
@@ -807,6 +839,14 @@ function openHeroDetail(fighter) {
 
 function closeHeroDetail() {
   ui.heroDetail.hidden = true;
+}
+
+function openManualDetail() {
+  ui.manualDetail.hidden = false;
+}
+
+function closeManualDetail() {
+  ui.manualDetail.hidden = true;
 }
 
 function appendDetailSection(title, entries, emptyText) {
@@ -1864,6 +1904,11 @@ ui.meleeBackBtn.addEventListener("click", closeMeleeAttackAllocator);
 ui.meleeSubmitBtn.addEventListener("click", submitMeleeAttacks);
 ui.chaseDrainBtn.addEventListener("click", () => resolvePendingEndChoice("drain"));
 ui.chaseGainBtn.addEventListener("click", () => resolvePendingEndChoice("gain"));
+ui.manualBtn.addEventListener("click", openManualDetail);
+ui.manualClose.addEventListener("click", closeManualDetail);
+ui.manualDetail.addEventListener("click", (event) => {
+  if (event.target === ui.manualDetail) closeManualDetail();
+});
 ui.playerAvatar.addEventListener("click", () => openHeroDetail(state.player));
 ui.enemyAvatar.addEventListener("click", () => openHeroDetail(state.enemy));
 ui.heroDetailClose.addEventListener("click", closeHeroDetail);
@@ -1872,7 +1917,10 @@ ui.heroDetail.addEventListener("click", (event) => {
 });
 if (document.addEventListener) {
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeHeroDetail();
+    if (event.key === "Escape") {
+      closeHeroDetail();
+      closeManualDetail();
+    }
   });
 }
 ui.clearLogBtn.addEventListener("click", () => {
