@@ -91,6 +91,7 @@ const BALANCE = {
       predictionCost: 2,
       drainCost: 2,
       drainAmount: 4,
+      drainPointDefense: 4,
       ghostHealPerDamage: 1,
     },
   },
@@ -408,13 +409,13 @@ const HEROES = {
     name: "占星家 Astrologer",
     maxHp: BALANCE.heroes.astrologer.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `鬼刀可吸血。A 预判：${BALANCE.heroes.astrologer.predictionCost} 费，本回合带小防，下一回合从天而降一把鬼刀且也带小防。B 吸：${BALANCE.heroes.astrologer.drainCost} 费，若目标无防御等级，目标最多 -${BALANCE.heroes.astrologer.drainAmount} XP 至 0，占星家 +${BALANCE.heroes.astrologer.drainAmount} XP。`,
+    description: `鬼刀可吸血。 预判：${BALANCE.heroes.astrologer.predictionCost} 费，本回合带小防，下一回合从天而降一把鬼刀且也带小防。汲取：${BALANCE.heroes.astrologer.drainCost} 费，对目标自带小防；若目标对占星家无防御等级，目标最多 -${BALANCE.heroes.astrologer.drainAmount} XP 至 0，占星家 +${BALANCE.heroes.astrologer.drainAmount} XP。`,
     passives: [{ name: "星蚀", text: `鬼刀造成伤害后回复 ${BALANCE.heroes.astrologer.ghostHealPerDamage} HP` }],
     activeSkills: [
       {
         id: "astrologer-predict",
         kind: "skill",
-        name: "A 预判",
+        name: "预判",
         cost: BALANCE.heroes.astrologer.predictionCost,
         power: 0,
         defense: BALANCE.defenseGrades.small,
@@ -427,14 +428,15 @@ const HEROES = {
       {
         id: "astrologer-drain",
         kind: "skill",
-        name: "B 吸",
+        name: "汲取",
         cost: BALANCE.heroes.astrologer.drainCost,
         power: 0,
         defense: 0,
         xpGain: 0,
-        text: `花费 ${BALANCE.heroes.astrologer.drainCost}，目标无防御时吸取 ${BALANCE.heroes.astrologer.drainAmount} XP`,
+        text: `花费 ${BALANCE.heroes.astrologer.drainCost}，对目标小防；目标无防御时吸取 ${BALANCE.heroes.astrologer.drainAmount} XP`,
         effects: {
           drainXp: true,
+          pointDefense: BALANCE.heroes.astrologer.drainPointDefense,
         },
       },
     ],
@@ -1017,7 +1019,8 @@ function resolveMeleeRound(playerPlans) {
   for (const intent of getMeleeAttackIntents(plans)) {
     const target = state.melee.fighters.find((fighter) => fighter.id === intent.targetId);
     if (!target || target.hp <= 0 || intent.source.hp <= 0) continue;
-    const defense = defenses.get(target.id) || 0;
+    const targetPlan = plans.get(target.id);
+    const defense = targetPlan ? getIncomingDefense(target, targetPlan.action, intent.source) : defenses.get(target.id) || 0;
     const attack = getAttack(intent.source, intent.action, target);
     if (attack > defense) {
       const sourcePlan = plans.get(intent.source.id);
@@ -1233,42 +1236,49 @@ function resolveRound(playerAction, enemyAction) {
 
   const playerDefense = getDefense(player, playerAction);
   const enemyDefense = getDefense(enemy, enemyAction);
+  const playerIncomingDefense = getIncomingDefense(player, playerAction, enemy);
+  const enemyIncomingDefense = getIncomingDefense(enemy, enemyAction, player);
   const playerAttack = getAttack(player, playerAction, enemy);
   const enemyAttack = getAttack(enemy, enemyAction, player);
 
   const damageNotes = [];
 
-  applyPostDefenseSkillEffects(player, playerAction, enemy, enemyDefense, logs);
-  applyPostDefenseSkillEffects(enemy, enemyAction, player, playerDefense, logs);
-  applyScheduledGhostAttack(player, enemy, enemyDefense, logs, damageNotes, ui.enemyCard, contextForPlayer);
-  applyScheduledGhostAttack(enemy, player, playerDefense, logs, damageNotes, ui.playerCard, contextForEnemy);
+  applyPostDefenseSkillEffects(player, playerAction, enemy, enemyIncomingDefense, logs);
+  applyPostDefenseSkillEffects(enemy, enemyAction, player, playerIncomingDefense, logs);
+  applyScheduledGhostAttack(player, enemy, enemyIncomingDefense, logs, damageNotes, ui.enemyCard, contextForPlayer);
+  applyScheduledGhostAttack(enemy, player, playerIncomingDefense, logs, damageNotes, ui.playerCard, contextForEnemy);
 
   if (playerAction.kind === "attack" && enemyAction.kind === "attack") {
-    if (playerAttack > enemyAttack) {
-      contextForPlayer.hit = true;
-      contextForPlayer.damageDealt = dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 对攻压过${enemy.label} ${enemyAction.name}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
-    } else if (enemyAttack > playerAttack) {
-      contextForEnemy.hit = true;
-      contextForEnemy.damageDealt = dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 对攻压过${player.label}的 ${playerAction.name}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
-    } else {
-      logs.push({ text: `双方对攻强度同为 ${playerAttack}，互相抵消。` });
-    }
-  } else {
-    const playerHits = playerAction.kind === "attack" && playerAttack > enemyDefense;
-    const enemyHits = enemyAction.kind === "attack" && enemyAttack > playerDefense;
+    const playerHits = playerAttack > enemyIncomingDefense;
+    const enemyHits = enemyAttack > playerIncomingDefense;
 
     if (playerHits) {
       contextForPlayer.hit = true;
-      contextForPlayer.damageDealt = dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 击穿${enemy.label}防御 ${formatDefense(enemyDefense)}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
+      contextForPlayer.damageDealt = dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 对攻压过${enemy.label} ${enemyAction.name}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
+    }
+    if (enemyHits) {
+      contextForEnemy.hit = true;
+      contextForEnemy.damageDealt = dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 对攻压过${player.label}的 ${playerAction.name}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
+    }
+    if (!playerHits && !enemyHits && playerAttack === enemyAttack) {
+      logs.push({ text: `双方对攻强度同为 ${playerAttack}，互相抵消。` });
+    }
+  } else {
+    const playerHits = playerAction.kind === "attack" && playerAttack > enemyIncomingDefense;
+    const enemyHits = enemyAction.kind === "attack" && enemyAttack > playerIncomingDefense;
+
+    if (playerHits) {
+      contextForPlayer.hit = true;
+      contextForPlayer.damageDealt = dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 击穿${enemy.label}防御 ${formatDefense(enemyIncomingDefense)}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
     } else if (playerAction.kind === "attack") {
-      logs.push({ text: `${player.label}用 ${playerAction.name}，强度 ${playerAttack} 未超过${enemy.label}防御 ${formatDefense(enemyDefense)}。` });
+      logs.push({ text: `${player.label}用 ${playerAction.name}，强度 ${playerAttack} 未超过${enemy.label}防御 ${formatDefense(enemyIncomingDefense)}。` });
     }
 
     if (enemyHits) {
       contextForEnemy.hit = true;
-      contextForEnemy.damageDealt = dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 击穿${player.label}防御 ${formatDefense(playerDefense)}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
+      contextForEnemy.damageDealt = dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 击穿${player.label}防御 ${formatDefense(playerIncomingDefense)}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
     } else if (enemyAction.kind === "attack") {
-      logs.push({ text: `${enemy.label}用 ${enemyAction.name}，强度 ${enemyAttack} 未超过${player.label}防御 ${formatDefense(playerDefense)}。` });
+      logs.push({ text: `${enemy.label}用 ${enemyAction.name}，强度 ${enemyAttack} 未超过${player.label}防御 ${formatDefense(playerIncomingDefense)}。` });
     }
   }
 
@@ -1319,7 +1329,10 @@ function dealDamage(attacker, defender, action, text, logs, damageNotes, defende
 function summarizeAction(fighter, action, attack, defense, xpGain = action.xpGain) {
   if (action.kind === "charge") return `${action.name}：XP +${xpGain}，防御 ${formatDefense(defense)}`;
   if (action.kind === "defense") return `${action.name}：花费 ${getCost(fighter, action)}，防御 ${formatDefense(defense)}`;
-  if (action.kind === "skill") return `${action.name}：花费 ${getCost(fighter, action)}，防御 ${formatDefense(defense)}`;
+  if (action.kind === "skill") {
+    const pointDefense = action.effects?.pointDefense ? `，单点防御 ${formatDefense(action.effects.pointDefense)}` : "";
+    return `${action.name}：花费 ${getCost(fighter, action)}，防御 ${formatDefense(defense)}${pointDefense}`;
+  }
   return `${action.name}：花费 ${getCost(fighter, action)}，强度 ${attack}`;
 }
 
@@ -1348,6 +1361,26 @@ function getAttack(fighter, action, defender = null) {
     value = runHook(defender, "modifyIncomingAttack", value, defender, fighter, action);
   }
   return value;
+}
+
+function getIncomingDefense(defender, defenderAction, attacker) {
+  return Math.max(getDefense(defender, defenderAction), getPointDefenseAgainst(defender, defenderAction, attacker));
+}
+
+function getPointDefenseAgainst(fighter, action, target) {
+  if (!action || !target) return 0;
+  if (action.kind === "multiattack") {
+    return action.attacks
+      .filter((attack) => attack.targetId === target.id)
+      .reduce((best, attack) => Math.max(best, getAttack(fighter, attack.action, target)), 0);
+  }
+  if (action.kind === "attack" && (!action.targetId || action.targetId === target.id)) {
+    return getAttack(fighter, action, target);
+  }
+  if (action.effects?.pointDefense && (!action.targetId || action.targetId === target.id)) {
+    return action.effects.pointDefense;
+  }
+  return 0;
 }
 
 function getCost(fighter, action) {
