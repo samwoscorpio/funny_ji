@@ -49,7 +49,8 @@ input {
 .topbar,
 .control-panel,
 .log-panel,
-.fighter {
+.fighter,
+.hero-detail {
   background: rgba(27, 31, 24, 0.94);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
@@ -105,7 +106,7 @@ label {
   padding: 18px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   position: relative;
   overflow: hidden;
 }
@@ -123,6 +124,11 @@ label {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  align-items: start;
+}
+
+.fighter-head > div:first-child {
+  min-width: 0;
 }
 
 .side-label {
@@ -136,6 +142,34 @@ label {
   font-size: 26px;
   line-height: 1.05;
   overflow-wrap: anywhere;
+}
+
+.hero-avatar {
+  width: 74px;
+  height: 74px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  font-size: 34px;
+  font-weight: 1000;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.hero-avatar:hover {
+  transform: translateY(-1px);
+  border-color: var(--gold);
+}
+
+.hero-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .pose {
@@ -307,6 +341,10 @@ label {
   background: rgba(255, 255, 255, 0.03);
   padding: 10px 12px;
   font-weight: 900;
+}
+
+.fighter .last-action {
+  margin-top: auto;
 }
 
 .versus {
@@ -640,6 +678,124 @@ input {
   font-weight: 900;
 }
 
+.hero-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(5, 7, 5, 0.72);
+}
+
+.hero-detail-backdrop[hidden] {
+  display: none;
+}
+
+.hero-detail {
+  width: min(520px, 100%);
+  max-height: min(78vh, 680px);
+  overflow: auto;
+  padding: 18px;
+  position: relative;
+  display: grid;
+  gap: 14px;
+}
+
+.detail-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.hero-detail-head {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding-right: 42px;
+}
+
+.detail-avatar {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 34px;
+  font-weight: 1000;
+  overflow: hidden;
+}
+
+.detail-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.hero-detail h2 {
+  font-size: 24px;
+}
+
+.hero-detail p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.hero-detail-body {
+  display: grid;
+  gap: 12px;
+}
+
+.detail-section {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.detail-section h3 {
+  margin: 0;
+  color: var(--gold);
+  font-size: 15px;
+}
+
+.detail-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detail-list li {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+  padding: 9px 10px;
+  line-height: 1.35;
+}
+
+.detail-list strong {
+  color: var(--text);
+}
+
+.detail-list span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .shake {
   animation: shake 260ms ease;
 }
@@ -727,6 +883,7 @@ input {
   .fighter {
     min-height: 0;
     padding: 10px;
+    gap: 7px;
   }
 
   .fighter::before {
@@ -745,6 +902,12 @@ input {
   .fighter h2 {
     font-size: 16px;
     line-height: 1.15;
+  }
+
+  .hero-avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
   }
 
   .pose {
@@ -782,6 +945,8 @@ input {
   .passive-panel {
     gap: 4px;
     margin-top: 6px;
+    max-height: 50px;
+    overflow: hidden;
   }
 
   .mini-title {
@@ -807,6 +972,7 @@ input {
   }
 
   .setup-row {
+    order: 20;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 38px;
     gap: 8px;
   }
@@ -814,6 +980,14 @@ input {
   .control-panel {
     padding: 8px;
     gap: 8px;
+  }
+
+  .control-panel > .action-group {
+    order: 1;
+  }
+
+  #skillGroup {
+    order: 2;
   }
 
   label {
@@ -828,6 +1002,7 @@ input {
   }
 
   .match-panel {
+    order: 21;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 6px;
   }
@@ -872,7 +1047,7 @@ input {
   }
 
   .action-card {
-    min-height: 46px;
+    min-height: 42px;
     padding: 6px;
     gap: 2px;
   }
@@ -914,15 +1089,59 @@ input {
     font-size: 12px;
     line-height: 1.35;
   }
+
+  .hero-detail-backdrop {
+    padding: 10px;
+  }
+
+  .hero-detail {
+    max-height: 86vh;
+    padding: 14px;
+  }
+
+  .detail-close {
+    width: 34px;
+    height: 34px;
+  }
+
+  .hero-detail-head {
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .detail-avatar {
+    width: 58px;
+    height: 58px;
+    font-size: 26px;
+  }
+
+  .hero-detail h2 {
+    font-size: 20px;
+  }
 }
 
 @media (max-width: 430px) {
   .fighter {
     padding: 8px;
+    gap: 6px;
   }
 
   .fighter h2 {
     font-size: 14px;
+  }
+
+  .hero-avatar {
+    width: 38px;
+    height: 38px;
+    font-size: 19px;
+  }
+
+  .meters {
+    margin: 5px 0 4px;
+  }
+
+  .passive-panel {
+    max-height: 42px;
   }
 
   .attack-grid {
@@ -938,7 +1157,7 @@ input {
   }
 
   .action-card {
-    min-height: 44px;
+    min-height: 40px;
   }
 
   .action-card strong {

@@ -464,6 +464,12 @@ const HEROES = {
   },
 };
 
+const HERO_AVATARS = {
+  assassin: "./pic/assassin.png",
+  astrologer: "./pic/astrologer.png",
+  iceSorcerer: "./pic/icesorcerer.png",
+};
+
 const state = {
   round: 1,
   over: false,
@@ -494,6 +500,8 @@ const ui = {
   enemyHero: document.querySelector("#enemyHero"),
   playerHeroName: document.querySelector("#playerHeroName"),
   enemyHeroName: document.querySelector("#enemyHeroName"),
+  playerAvatar: document.querySelector("#playerAvatar"),
+  enemyAvatar: document.querySelector("#enemyAvatar"),
   playerHeroText: document.querySelector("#playerHeroText"),
   enemyHeroText: document.querySelector("#enemyHeroText"),
   playerPassivePanel: document.querySelector("#playerPassivePanel"),
@@ -540,6 +548,12 @@ const ui = {
   meleeAttackModeBtn: document.querySelector("#meleeAttackModeBtn"),
   meleeBackBtn: document.querySelector("#meleeBackBtn"),
   meleeSubmitBtn: document.querySelector("#meleeSubmitBtn"),
+  heroDetail: document.querySelector("#heroDetail"),
+  heroDetailClose: document.querySelector("#heroDetailClose"),
+  heroDetailAvatar: document.querySelector("#heroDetailAvatar"),
+  heroDetailTitle: document.querySelector("#heroDetailTitle"),
+  heroDetailMeta: document.querySelector("#heroDetailMeta"),
+  heroDetailBody: document.querySelector("#heroDetailBody"),
 };
 
 function makeFighter(label, heroId) {
@@ -591,8 +605,8 @@ function resetGame() {
 
 function populateHeroes() {
   for (const hero of Object.values(HEROES)) {
-    const playerOption = new Option(hero.name, hero.id);
-    const enemyOption = new Option(hero.name, hero.id);
+    const playerOption = new Option(getHeroDisplayName(hero), hero.id);
+    const enemyOption = new Option(getHeroDisplayName(hero), hero.id);
     ui.playerHero.add(playerOption);
     ui.enemyHero.add(enemyOption);
   }
@@ -624,8 +638,10 @@ function render() {
   const enemy = state.enemy;
 
   ui.roundNo.textContent = state.round;
-  ui.playerHeroName.textContent = player.hero.name;
-  ui.enemyHeroName.textContent = enemy.hero.name;
+  ui.playerHeroName.textContent = getHeroDisplayName(player.hero);
+  ui.enemyHeroName.textContent = getHeroDisplayName(enemy.hero);
+  renderHeroAvatar(ui.playerAvatar, player.hero);
+  renderHeroAvatar(ui.enemyAvatar, enemy.hero);
   ui.playerHeroText.textContent = player.hero.description;
   ui.enemyHeroText.textContent = enemy.hero.description;
   renderSkillActions(player);
@@ -694,9 +710,99 @@ function renderPassivePanel(fighter, panel, list) {
   for (const entry of entries) {
     const tag = document.createElement("span");
     tag.className = "status-tag";
-    tag.textContent = entry.text ? `${entry.name}：${entry.text}` : entry.name;
+    tag.textContent = formatStatusTag(entry);
+    tag.title = entry.text ? `${entry.name}：${entry.text}` : entry.name;
     list.append(tag);
   }
+}
+
+function getHeroDisplayName(hero) {
+  return hero.name.replace(/\s+[A-Za-z].*$/, "");
+}
+
+function renderHeroAvatar(container, hero) {
+  container.innerHTML = "";
+  container.title = `查看${getHeroDisplayName(hero)}技能`;
+  const avatar = HERO_AVATARS[hero.id];
+  if (!avatar) {
+    const fallback = document.createElement("span");
+    fallback.textContent = "❓";
+    container.append(fallback);
+    return;
+  }
+
+  const image = document.createElement("img");
+  image.src = avatar;
+  image.alt = getHeroDisplayName(hero);
+  image.onerror = () => {
+    container.innerHTML = "";
+    const fallback = document.createElement("span");
+    fallback.textContent = "❓";
+    container.append(fallback);
+  };
+  container.append(image);
+}
+
+function formatStatusTag(entry) {
+  if (!entry.text) return entry.name;
+  if (entry.name === "寒冰碎片" && entry.text.includes("🧊")) return entry.text.replace(/\s+/g, "");
+  if (entry.name === "寒冰碎片") return "碎片机制";
+  if (entry.name === "Ji 连击" || entry.name === "Ji刀连出") return `${entry.name} ${entry.text}`;
+  if (entry.text.includes("回合")) return `${entry.name} ${entry.text}`;
+  return entry.name;
+}
+
+function openHeroDetail(fighter) {
+  const hero = fighter.hero;
+  ui.heroDetailTitle.textContent = getHeroDisplayName(hero);
+  ui.heroDetailMeta.textContent = `${fighter.startingHp}血，开局 ${hero.startingXp} XP`;
+  ui.heroDetailBody.innerHTML = "";
+  renderHeroAvatar(ui.heroDetailAvatar, hero);
+
+  const summary = document.createElement("p");
+  summary.textContent = hero.description;
+  ui.heroDetailBody.append(summary);
+
+  appendDetailSection("被动", hero.passives || [], "无被动");
+  appendDetailSection("主动技能", hero.activeSkills || [], "无主动技能");
+
+  const liveEntries = getFighterStatusEntries(fighter).filter((entry) => !(hero.passives || []).includes(entry));
+  if (liveEntries.length) appendDetailSection("当前状态", liveEntries, "");
+  ui.heroDetail.hidden = false;
+}
+
+function closeHeroDetail() {
+  ui.heroDetail.hidden = true;
+}
+
+function appendDetailSection(title, entries, emptyText) {
+  const section = document.createElement("section");
+  section.className = "detail-section";
+  const heading = document.createElement("h3");
+  heading.textContent = title;
+  section.append(heading);
+
+  const list = document.createElement("ul");
+  list.className = "detail-list";
+  if (!entries.length && emptyText) {
+    const item = document.createElement("li");
+    const text = document.createElement("span");
+    text.textContent = emptyText;
+    item.append(text);
+    list.append(item);
+  }
+  for (const entry of entries) {
+    const item = document.createElement("li");
+    const name = document.createElement("strong");
+    const text = document.createElement("span");
+    name.textContent = entry.name;
+    text.textContent = entry.text || "";
+    item.append(name);
+    if (text.textContent) item.append(text);
+    list.append(item);
+  }
+  section.append(list);
+  ui.heroDetailBody.append(section);
 }
 
 function getFighterStatusEntries(fighter) {
@@ -1599,6 +1705,17 @@ ui.meleeDefBtn.addEventListener("click", () => submitMeleeBasic("def-small"));
 ui.meleeAttackModeBtn.addEventListener("click", openMeleeAttackAllocator);
 ui.meleeBackBtn.addEventListener("click", closeMeleeAttackAllocator);
 ui.meleeSubmitBtn.addEventListener("click", submitMeleeAttacks);
+ui.playerAvatar.addEventListener("click", () => openHeroDetail(state.player));
+ui.enemyAvatar.addEventListener("click", () => openHeroDetail(state.enemy));
+ui.heroDetailClose.addEventListener("click", closeHeroDetail);
+ui.heroDetail.addEventListener("click", (event) => {
+  if (event.target === ui.heroDetail) closeHeroDetail();
+});
+if (document.addEventListener) {
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeHeroDetail();
+  });
+}
 ui.clearLogBtn.addEventListener("click", () => {
   ui.battleLog.innerHTML = "";
 });

@@ -24,9 +24,7 @@
                 <span class="side-label" id="playerSideLabel">你</span>
                 <h2 id="playerHeroName">经典武者</h2>
               </div>
-              <div class="pose pose-left" aria-hidden="true">
-                <span></span><span></span><span></span>
-              </div>
+              <button class="hero-avatar" id="playerAvatar" type="button" aria-label="查看你的英雄技能"></button>
             </div>
             <div class="meters">
               <div class="meter-row hp-row">
@@ -60,9 +58,7 @@
                 <span class="side-label" id="enemySideLabel">电脑</span>
                 <h2 id="enemyHeroName">经典武者</h2>
               </div>
-              <div class="pose pose-right" aria-hidden="true">
-                <span></span><span></span><span></span>
-              </div>
+              <button class="hero-avatar" id="enemyAvatar" type="button" aria-label="查看电脑英雄技能"></button>
             </div>
             <div class="meters">
               <div class="meter-row hp-row">
@@ -172,6 +168,19 @@
         </section>
       </section>
     </main>
+    <div class="hero-detail-backdrop" id="heroDetail" hidden>
+      <section class="hero-detail" role="dialog" aria-modal="true" aria-labelledby="heroDetailTitle">
+        <button class="detail-close" id="heroDetailClose" type="button" aria-label="关闭">×</button>
+        <div class="hero-detail-head">
+          <div class="detail-avatar" id="heroDetailAvatar"></div>
+          <div>
+            <h2 id="heroDetailTitle">英雄</h2>
+            <p id="heroDetailMeta"></p>
+          </div>
+        </div>
+        <div class="hero-detail-body" id="heroDetailBody"></div>
+      </section>
+    </div>
     <script src="./game.js"></script>
   </body>
 </html>
