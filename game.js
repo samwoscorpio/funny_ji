@@ -40,6 +40,10 @@ const BALANCE = {
       bonusXp: 1,
       chaseXp: 1,
     },
+    balancedBot: {
+      maxHp: 2,
+      jiXpGain: 2,
+    },
     guard: {
       maxHp: 4,
       defenseBonus: 1,
@@ -187,6 +191,20 @@ const HEROES = {
       },
     },
   },
+  balancedBot: {
+    id: "balancedBot",
+    name: "平衡bot",
+    maxHp: BALANCE.heroes.balancedBot.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `稳定型英雄，每次 Ji 获得 ${BALANCE.heroes.balancedBot.jiXpGain} XP。`,
+    passives: [{ name: "均衡", text: `Ji 获得 ${BALANCE.heroes.balancedBot.jiXpGain} XP` }],
+    activeSkills: [],
+    hooks: {
+      modifyXpGain(value, self, action) {
+        return action.id === "ji" ? BALANCE.heroes.balancedBot.jiXpGain : value;
+      },
+    },
+  },
   guard: {
     id: "guard",
     name: "铁壁",
@@ -222,13 +240,13 @@ const HEROES = {
     name: "牧师 Priest",
     maxHp: BALANCE.heroes.priest.maxHp,
     startingXp: BALANCE.startingXp,
-    description: "辅助型英雄，血量更高，但只能使用 1 费、5 费、10 费攻击。",
+    description: "辅助型英雄，专职治疗师",
     passives: [{ name: "辅助", text: "只能使用 1/5/10 费攻击" }],
     activeSkills: [
       {
         id: "priest-shield",
         kind: "skill",
-        name: "A 小盾",
+        name: "庇护",
         cost: BALANCE.heroes.priest.shieldCost,
         power: 0,
         defense: BALANCE.defenseGrades.small,
@@ -242,7 +260,7 @@ const HEROES = {
       {
         id: "priest-heal",
         kind: "skill",
-        name: "B 奶",
+        name: "疗愈",
         cost: BALANCE.heroes.priest.healCost,
         power: 0,
         defense: BALANCE.defenseGrades.invincible,
@@ -267,7 +285,7 @@ const HEROES = {
     name: "刺客 Assassin",
     maxHp: BALANCE.heroes.assassin.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `高爆发英雄，HP=${BALANCE.heroes.assassin.maxHp}，每次 Ji 获得 ${BALANCE.heroes.assassin.jiXpGain} XP。`,
+    description: `高爆发脆皮英雄，每次 Ji 获得 ${BALANCE.heroes.assassin.jiXpGain} XP。`,
     passives: [{ name: "疾蓄", text: `Ji 获得 ${BALANCE.heroes.assassin.jiXpGain} XP` }],
     activeSkills: [],
     hooks: {
@@ -281,7 +299,7 @@ const HEROES = {
     name: "吸血鬼 Vampire",
     maxHp: BALANCE.heroes.vampire.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `续航型英雄，HP=${BALANCE.heroes.vampire.maxHp}，每造成 1 点伤害回复 ${BALANCE.heroes.vampire.healPerDamage} HP。`,
+    description: `肉盾克星，HP=${BALANCE.heroes.vampire.maxHp}，每造成 1 点伤害回复 ${BALANCE.heroes.vampire.healPerDamage} HP。`,
     passives: [{ name: "吸血", text: `造成伤害后回复 ${BALANCE.heroes.vampire.healPerDamage} HP` }],
     activeSkills: [],
     hooks: {
@@ -345,7 +363,7 @@ const HEROES = {
     description: `积攒寒冰碎片，满 ${BALANCE.heroes.iceSorcerer.critThreshold} 个后命中攻击会暴击并回复 ${BALANCE.heroes.iceSorcerer.critHeal} HP。3费攻只花 ${BALANCE.heroes.iceSorcerer.discountedAttackCost} XP，且别人用3费攻打冰法时只有1费攻效果。第一回合不能使用 Ji刀。`,
     passives: [
       { name: "寒冰碎片", text: `开局 ${BALANCE.heroes.iceSorcerer.startingShards} 个，满 ${BALANCE.heroes.iceSorcerer.critThreshold} 暴击回血` },
-      { name: "冰甲", text: `3费攻花费 ${BALANCE.heroes.iceSorcerer.discountedAttackCost}，来袭3费攻强度变 ${BALANCE.heroes.iceSorcerer.incomingAttackPower}` },
+      { name: "冰甲", text: `冰刀花费 ${BALANCE.heroes.iceSorcerer.discountedAttackCost}，来袭冰刀强度视为 ${BALANCE.heroes.iceSorcerer.incomingAttackPower}` },
     ],
     activeSkills: [
       {
@@ -421,7 +439,7 @@ const HEROES = {
     name: "占星家 Astrologer",
     maxHp: BALANCE.heroes.astrologer.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `鬼刀可吸血。 预判：${BALANCE.heroes.astrologer.predictionCost} 费，本回合带小防，下一回合从天而降一把鬼刀且也带小防。汲取：${BALANCE.heroes.astrologer.drainCost} 费，对目标自带小防；若目标对占星家无防御等级，目标最多 -${BALANCE.heroes.astrologer.drainAmount} XP 至 0，占星家 +${BALANCE.heroes.astrologer.drainAmount} XP。`,
+    description: `控场角色，拥有强大的续航能力`,
     passives: [{ name: "星蚀", text: `鬼刀造成伤害后回复 ${BALANCE.heroes.astrologer.ghostHealPerDamage} HP` }],
     activeSkills: [
       {
