@@ -621,6 +621,10 @@ input {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.defense-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .attack-grid {
   grid-template-columns: repeat(10, minmax(54px, 1fr));
 }
@@ -1234,6 +1238,11 @@ input {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .defense-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
   .skill-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1248,5 +1257,18 @@ input {
 
   .action-card span {
     font-size: 9px;
+  }
+
+  .defense-row .action-card {
+    padding: 5px;
+  }
+
+  .defense-row .action-card strong {
+    font-size: 11px;
+  }
+
+  .defense-row .action-card span {
+    font-size: 8px;
+    line-height: 1.12;
   }
 }
