@@ -153,9 +153,22 @@
             <div class="action-row skill-row" id="skillActions"></div>
           </div>
 
-          <div class="action-group">
+          <div class="action-group" id="attackGroup">
             <div class="group-title">攻击</div>
             <div class="attack-grid" id="attackActions"></div>
+          </div>
+
+          <div class="action-group end-phase-group" id="endPhaseGroup" hidden>
+            <div class="group-title">结束阶段</div>
+            <div class="end-phase-note" id="endPhaseNote"></div>
+            <div class="action-row skill-row">
+              <button class="action-card skill" id="chaseDrainBtn" type="button">
+                <strong>追索</strong><span>令目标 -1 XP</span>
+              </button>
+              <button class="action-card skill" id="chaseGainBtn" type="button">
+                <strong>追索</strong><span>自己 +1 XP</span>
+              </button>
+            </div>
           </div>
         </section>
 

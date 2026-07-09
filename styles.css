@@ -562,6 +562,20 @@ input {
   margin-bottom: 8px;
 }
 
+.end-phase-group {
+  border: 1px solid rgba(226, 184, 76, 0.42);
+  background: rgba(226, 184, 76, 0.055);
+  padding: 10px;
+}
+
+.end-phase-note {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin-bottom: 8px;
+}
+
 .action-row,
 .attack-grid {
   display: grid;
@@ -988,6 +1002,20 @@ input {
 
   #skillGroup {
     order: 2;
+  }
+
+  #endPhaseGroup {
+    order: 3;
+    padding: 8px;
+  }
+
+  #attackGroup {
+    order: 4;
+  }
+
+  .end-phase-note {
+    margin-bottom: 6px;
+    font-size: 11px;
   }
 
   label {

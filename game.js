@@ -35,13 +35,17 @@ const BALANCE = {
   },
   heroes: {
     battery: {
+      maxHp: 2,
       jiStreakRequired: 2,
       bonusXp: 1,
+      chaseXp: 1,
     },
     guard: {
+      maxHp: 4,
       defenseBonus: 1,
     },
     breaker: {
+      maxHp: 4,
       minAttackCost: 5,
       attackBonus: 1,
     },
@@ -156,12 +160,20 @@ const HEROES = {
   battery: {
     id: "battery",
     name: "聚气师",
-    maxHp: BALANCE.startingHp,
+    maxHp: BALANCE.heroes.battery.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `连续使用 Ji 达到 ${BALANCE.heroes.battery.jiStreakRequired} 回合时，本回合额外获得 ${BALANCE.heroes.battery.bonusXp} XP。`,
-    passives: [{ name: "聚气", text: `连续 Ji 后额外 +${BALANCE.heroes.battery.bonusXp} XP` }],
+    description: `连续使用 Ji 达到 ${BALANCE.heroes.battery.jiStreakRequired} 回合时，本回合额外获得 ${BALANCE.heroes.battery.bonusXp} XP。追索：本回合造成伤害后，结束阶段选择目标 -${BALANCE.heroes.battery.chaseXp} XP，或自己 +${BALANCE.heroes.battery.chaseXp} XP。`,
+    passives: [
+      { name: "聚气", text: `连续 Ji 后额外 +${BALANCE.heroes.battery.bonusXp} XP` },
+      { name: "追索", text: `造成伤害后结束阶段二选一` },
+    ],
     activeSkills: [],
     hooks: {
+      onDealDamage(self, target, context) {
+        if (context.damage <= 0) return;
+        self.flags.chaseTargets ||= [];
+        if (!self.flags.chaseTargets.includes(target)) self.flags.chaseTargets.push(target);
+      },
       afterRound(self, opponent, context) {
         if (context.selfAction.id !== "ji") {
           self.flags.jiStreak = 0;
@@ -178,7 +190,7 @@ const HEROES = {
   guard: {
     id: "guard",
     name: "铁壁",
-    maxHp: BALANCE.startingHp,
+    maxHp: BALANCE.heroes.guard.maxHp,
     startingXp: BALANCE.startingXp,
     description: `所有防御手势的防御值 +${BALANCE.heroes.guard.defenseBonus}。`,
     passives: [{ name: "铁壁", text: `防御值 +${BALANCE.heroes.guard.defenseBonus}` }],
@@ -192,7 +204,7 @@ const HEROES = {
   breaker: {
     id: "breaker",
     name: "破阵手",
-    maxHp: BALANCE.startingHp,
+    maxHp: BALANCE.heroes.breaker.maxHp,
     startingXp: BALANCE.startingXp,
     description: `使用 ${BALANCE.heroes.breaker.minAttackCost} 费及以上攻击时，攻击强度 +${BALANCE.heroes.breaker.attackBonus}。`,
     passives: [{ name: "破阵", text: `${BALANCE.heroes.breaker.minAttackCost} 费以上攻击 +${BALANCE.heroes.breaker.attackBonus}` }],
@@ -478,6 +490,7 @@ const state = {
   player: null,
   enemy: null,
   mode: "cpu",
+  pendingEndChoice: null,
   melee: {
     fighters: [],
   },
@@ -527,6 +540,10 @@ const ui = {
   skillGroup: document.querySelector("#skillGroup"),
   skillActions: document.querySelector("#skillActions"),
   attackActions: document.querySelector("#attackActions"),
+  endPhaseGroup: document.querySelector("#endPhaseGroup"),
+  endPhaseNote: document.querySelector("#endPhaseNote"),
+  chaseDrainBtn: document.querySelector("#chaseDrainBtn"),
+  chaseGainBtn: document.querySelector("#chaseGainBtn"),
   battleLog: document.querySelector("#battleLog"),
   resetBtn: document.querySelector("#resetBtn"),
   clearLogBtn: document.querySelector("#clearLogBtn"),
@@ -580,6 +597,7 @@ function resetGame() {
   state.round = 1;
   state.over = false;
   state.mode = "cpu";
+  state.pendingEndChoice = null;
   stopPolling();
   state.online = {
     roomCode: "",
@@ -668,8 +686,13 @@ function render() {
   ui.fighterGrid.hidden = state.mode === "melee";
   ui.meleePanel.hidden = state.mode !== "melee";
   ui.standardActionGroups.forEach((group) => {
+    if (group.id === "endPhaseGroup") {
+      group.hidden = state.mode === "melee" || !state.pendingEndChoice;
+      return;
+    }
     group.hidden = state.mode === "melee" || (group.id === "skillGroup" && (player.hero.activeSkills || []).length === 0);
   });
+  renderEndPhaseChoice();
 
   document.querySelectorAll("[data-action]").forEach((button) => {
     const action = getActionById(button.dataset.action, player);
@@ -681,11 +704,20 @@ function render() {
       || state.over
       || waitingForOnlineOpponent
       || state.online.pendingActionId
+      || state.pendingEndChoice
       || !canUseAction(player, action);
   });
   if (state.mode === "melee") {
     renderMelee();
   }
+}
+
+function renderEndPhaseChoice() {
+  const choice = state.pendingEndChoice;
+  if (!choice) return;
+  ui.endPhaseNote.textContent = `${choice.actor.label}触发追索：本回合对${choice.target.label}造成了伤害。`;
+  ui.chaseDrainBtn.innerHTML = `<strong>追索</strong><span>${choice.target.label} -${BALANCE.heroes.battery.chaseXp} XP</span>`;
+  ui.chaseGainBtn.innerHTML = `<strong>追索</strong><span>${choice.actor.label} +${BALANCE.heroes.battery.chaseXp} XP</span>`;
 }
 
 function renderSkillActions(fighter) {
@@ -837,7 +869,7 @@ function formatHearts(hp) {
 }
 
 function playRound(playerActionId) {
-  if (state.over) return;
+  if (state.over || state.pendingEndChoice) return;
   const playerAction = getActionById(playerActionId, state.player);
   if (!playerAction || !canUseAction(state.player, playerAction)) return;
   if (state.mode === "online") {
@@ -847,11 +879,22 @@ function playRound(playerActionId) {
 
   const enemyAction = chooseEnemyAction();
   const report = resolveRound(playerAction, enemyAction);
+  finishRound(report);
+}
+
+function finishRound(report) {
   ui.playerLast.textContent = report.playerSummary;
   ui.enemyLast.textContent = report.enemySummary;
 
   for (const item of report.logs) {
     addLog(item.text, item.kind);
+  }
+
+  const pendingChoice = state.over ? null : applyAutomaticEndChoices(report.endChoices || []);
+  if (pendingChoice && !state.over) {
+    state.pendingEndChoice = pendingChoice;
+    render();
+    return;
   }
 
   if (!state.over) {
@@ -865,6 +908,7 @@ function startMeleeGame() {
   state.mode = "melee";
   state.round = 1;
   state.over = false;
+  state.pendingEndChoice = null;
   state.player = makeFighter("你", ui.playerHero.value);
   state.enemy = makeFighter("电脑A", ui.enemyHero.value);
   state.melee.fighters = [
@@ -996,6 +1040,7 @@ function resolveMeleeRound(playerPlans) {
   const plans = new Map(playerPlans);
   const logs = [];
   const notes = [];
+  for (const fighter of fighters) clearRoundPhaseFlags(fighter);
 
   for (const fighter of fighters) {
     if (!plans.has(fighter.id)) {
@@ -1039,6 +1084,12 @@ function resolveMeleeRound(playerPlans) {
 
   for (const note of [...notes, ...Array.from(plans.values()).flatMap((plan) => plan.context.notes)]) {
     logs.push({ text: note });
+  }
+
+  for (const choice of collectEndPhaseChoices(fighters)) {
+    for (const item of applyEndPhaseChoice(choice, chooseAutomaticEndPhaseOption(choice))) {
+      logs.push(item);
+    }
   }
 
   updateMeleeOutcome(logs);
@@ -1219,6 +1270,8 @@ function resolveRound(playerAction, enemyAction) {
   const player = state.player;
   const enemy = state.enemy;
   const logs = [];
+  clearRoundPhaseFlags(player);
+  clearRoundPhaseFlags(enemy);
   const contextForPlayer = { selfAction: playerAction, opponentAction: enemyAction, notes: [], hit: false, damageDealt: 0 };
   const contextForEnemy = { selfAction: enemyAction, opponentAction: playerAction, notes: [], hit: false, damageDealt: 0 };
 
@@ -1295,6 +1348,7 @@ function resolveRound(playerAction, enemyAction) {
     logs.push({ text: note });
   }
 
+  const endChoices = collectEndPhaseChoices([player, enemy]);
   const playerSummary = summarizeAction(player, playerAction, playerAttack, playerDefense, playerXpGain);
   const enemySummary = summarizeAction(enemy, enemyAction, enemyAttack, enemyDefense, enemyXpGain);
 
@@ -1311,7 +1365,7 @@ function resolveRound(playerAction, enemyAction) {
     logs.push({ text: "双方都没有造成伤害。" });
   }
 
-  return { logs, playerSummary, enemySummary };
+  return { logs, playerSummary, enemySummary, endChoices };
 }
 
 function dealDamage(attacker, defender, action, text, logs, damageNotes, defenderCard) {
@@ -1324,6 +1378,73 @@ function dealDamage(attacker, defender, action, text, logs, damageNotes, defende
   runHook(defender, "afterTakeDamage", defender, attacker, context);
   if (defenderCard) flash(defenderCard);
   return damage;
+}
+
+function clearRoundPhaseFlags(fighter) {
+  if (!fighter?.flags) return;
+  fighter.flags.chaseTargets = [];
+}
+
+function collectEndPhaseChoices(fighters) {
+  const choices = [];
+  for (const fighter of fighters) {
+    if (fighter.heroId !== "battery" || fighter.hp <= 0) continue;
+    for (const target of fighter.flags.chaseTargets || []) {
+      if (!target || target.hp <= 0) continue;
+      choices.push({
+        id: "battery-chase",
+        actor: fighter,
+        target,
+      });
+    }
+  }
+  return choices;
+}
+
+function applyAutomaticEndChoices(choices) {
+  let manualChoice = null;
+  for (const choice of choices) {
+    if (state.mode === "cpu" && choice.actor === state.player && !manualChoice) {
+      manualChoice = choice;
+      continue;
+    }
+    for (const item of applyEndPhaseChoice(choice, chooseAutomaticEndPhaseOption(choice))) {
+      addLog(item.text, item.kind);
+    }
+  }
+  return manualChoice;
+}
+
+function chooseAutomaticEndPhaseOption(choice) {
+  return choice.target.xp > 0 ? "drain" : "gain";
+}
+
+function resolvePendingEndChoice(option) {
+  if (!state.pendingEndChoice) return;
+  const choice = state.pendingEndChoice;
+  state.pendingEndChoice = null;
+  for (const item of applyEndPhaseChoice(choice, option)) {
+    addLog(item.text, item.kind);
+  }
+  if (!state.over) {
+    state.round += 1;
+  }
+  render();
+}
+
+function applyEndPhaseChoice(choice, option) {
+  if (!choice || choice.id !== "battery-chase") return [];
+  const amount = BALANCE.heroes.battery.chaseXp;
+  if (option === "drain") {
+    const lost = Math.min(choice.target.xp, amount);
+    choice.target.xp -= lost;
+    return [{ text: lost > 0
+      ? `${choice.actor.label}发动追索，令${choice.target.label} -${lost} XP。`
+      : `${choice.actor.label}发动追索，但${choice.target.label}没有 XP 可扣。`
+    }];
+  }
+  choice.actor.xp += amount;
+  return [{ text: `${choice.actor.label}发动追索，获得 ${amount} XP。` }];
 }
 
 function summarizeAction(fighter, action, attack, defense, xpGain = action.xpGain) {
@@ -1527,6 +1648,7 @@ async function createOnlineRoom() {
     state.round = 1;
     state.over = false;
     state.online.initialized = false;
+    state.pendingEndChoice = null;
     ui.playerLast.textContent = "等待出手";
     ui.enemyLast.textContent = "等待对手加入";
     ui.battleLog.innerHTML = "";
@@ -1566,6 +1688,7 @@ function enterOnlineRoom(data) {
   state.online.playerId = data.playerId;
   state.online.slot = data.slot;
   state.online.pendingActionId = "";
+  state.pendingEndChoice = null;
   state.online.appliedRounds = new Set();
   ui.roomCodeInput.value = data.code;
 }
@@ -1677,6 +1800,7 @@ async function applyOnlineResult(result) {
   for (const item of report.logs) {
     addLog(item.text, item.kind);
   }
+  if (!state.over) applyAutomaticEndChoices(report.endChoices || []);
   state.online.appliedRounds.add(result.round);
   state.online.pendingActionId = "";
   if (!state.over) {
@@ -1738,6 +1862,8 @@ ui.meleeDefBtn.addEventListener("click", () => submitMeleeBasic("def-small"));
 ui.meleeAttackModeBtn.addEventListener("click", openMeleeAttackAllocator);
 ui.meleeBackBtn.addEventListener("click", closeMeleeAttackAllocator);
 ui.meleeSubmitBtn.addEventListener("click", submitMeleeAttacks);
+ui.chaseDrainBtn.addEventListener("click", () => resolvePendingEndChoice("drain"));
+ui.chaseGainBtn.addEventListener("click", () => resolvePendingEndChoice("gain"));
 ui.playerAvatar.addEventListener("click", () => openHeroDetail(state.player));
 ui.enemyAvatar.addEventListener("click", () => openHeroDetail(state.enemy));
 ui.heroDetailClose.addEventListener("click", closeHeroDetail);
