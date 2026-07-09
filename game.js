@@ -34,6 +34,10 @@ const BALANCE = {
     ],
   },
   heroes: {
+    woodendummy:
+    {
+      jiXpGain: 0,
+    },
     battery: {
       maxHp: 2,
       jiStreakRequired: 2,
@@ -102,6 +106,15 @@ const BALANCE = {
       drainPointDefense: 4,
       ghostHealPerDamage: 1,
     },
+    dancer: {
+      maxHp: 1,
+      jiXpGain: 2,
+      spinCost: 0,
+      spinMaxPower: 4,
+      grandSpinCost: 1,
+      grandSpinMaxPower: 6,
+      forceJiTurns: 1,
+    },
   },
   ai: {
     lowEnergyTarget: 2,
@@ -151,90 +164,7 @@ function buildActions(balance) {
 const ACTION_BY_ID = Object.fromEntries(ACTIONS.map((action) => [action.id, action]));
 
 const HEROES = {
-  classic: {
-    id: "classic",
-    name: "经典武者",
-    maxHp: BALANCE.startingHp,
-    startingXp: BALANCE.startingXp,
-    description: "无额外机制，完全按童年规则结算。",
-    passives: [],
-    activeSkills: [],
-    hooks: {},
-  },
-  battery: {
-    id: "battery",
-    name: "聚气师",
-    maxHp: BALANCE.heroes.battery.maxHp,
-    startingXp: BALANCE.startingXp,
-    description: `连续使用 Ji 达到 ${BALANCE.heroes.battery.jiStreakRequired} 回合时，本回合额外获得 ${BALANCE.heroes.battery.bonusXp} XP。追索：本回合造成伤害后，结束阶段选择目标 -${BALANCE.heroes.battery.chaseXp} XP，或自己 +${BALANCE.heroes.battery.chaseXp} XP。`,
-    passives: [
-      { name: "聚气", text: `连续 Ji 后额外 +${BALANCE.heroes.battery.bonusXp} XP` },
-      { name: "追索", text: `造成伤害后结束阶段二选一` },
-    ],
-    activeSkills: [],
-    hooks: {
-      onDealDamage(self, target, context) {
-        if (context.damage <= 0) return;
-        self.flags.chaseTargets ||= [];
-        if (!self.flags.chaseTargets.includes(target)) self.flags.chaseTargets.push(target);
-      },
-      afterRound(self, opponent, context) {
-        if (context.selfAction.id !== "ji") {
-          self.flags.jiStreak = 0;
-          return;
-        }
-        self.flags.jiStreak = (self.flags.jiStreak || 0) + 1;
-        if (self.flags.jiStreak >= BALANCE.heroes.battery.jiStreakRequired) {
-          self.xp += BALANCE.heroes.battery.bonusXp;
-          context.notes.push(`${self.label}连续 Ji，额外获得 ${BALANCE.heroes.battery.bonusXp} XP。`);
-        }
-      },
-    },
-  },
-  balancedBot: {
-    id: "balancedBot",
-    name: "平衡bot",
-    maxHp: BALANCE.heroes.balancedBot.maxHp,
-    startingXp: BALANCE.startingXp,
-    description: `稳定型英雄，每次 Ji 获得 ${BALANCE.heroes.balancedBot.jiXpGain} XP。`,
-    passives: [{ name: "均衡", text: `Ji 获得 ${BALANCE.heroes.balancedBot.jiXpGain} XP` }],
-    activeSkills: [],
-    hooks: {
-      modifyXpGain(value, self, action) {
-        return action.id === "ji" ? BALANCE.heroes.balancedBot.jiXpGain : value;
-      },
-    },
-  },
-  guard: {
-    id: "guard",
-    name: "铁壁",
-    maxHp: BALANCE.heroes.guard.maxHp,
-    startingXp: BALANCE.startingXp,
-    description: `所有防御手势的防御值 +${BALANCE.heroes.guard.defenseBonus}。`,
-    passives: [{ name: "铁壁", text: `防御值 +${BALANCE.heroes.guard.defenseBonus}` }],
-    activeSkills: [],
-    hooks: {
-      modifyDefense(value, self, action) {
-        return action.kind === "defense" ? value + BALANCE.heroes.guard.defenseBonus : value;
-      },
-    },
-  },
-  breaker: {
-    id: "breaker",
-    name: "破阵手",
-    maxHp: BALANCE.heroes.breaker.maxHp,
-    startingXp: BALANCE.startingXp,
-    description: `使用 ${BALANCE.heroes.breaker.minAttackCost} 费及以上攻击时，攻击强度 +${BALANCE.heroes.breaker.attackBonus}。`,
-    passives: [{ name: "破阵", text: `${BALANCE.heroes.breaker.minAttackCost} 费以上攻击 +${BALANCE.heroes.breaker.attackBonus}` }],
-    activeSkills: [],
-    hooks: {
-      modifyAttack(value, self, action) {
-        return action.kind === "attack" && action.cost >= BALANCE.heroes.breaker.minAttackCost
-          ? value + BALANCE.heroes.breaker.attackBonus
-          : value;
-      },
-    },
-  },
+
   priest: {
     id: "priest",
     name: "牧师 Priest",
@@ -277,6 +207,65 @@ const HEROES = {
       canUseAction(action) {
         if (action.kind !== "attack") return true;
         return BALANCE.heroes.priest.allowedAttackCosts.includes(action.cost);
+      },
+    },
+  },
+  dancer: {
+    id: "dancer",
+    name: "舞女 Dancer",
+    maxHp: BALANCE.heroes.dancer.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `灵巧控场英雄, 被舞女击中的目标下回合强制出 Ji。`,
+    passives: [
+      { name: "迷步", text: `击中目标后，下回合强制目标出 Ji` },
+    ],
+    activeSkills: [
+      {
+        id: "dancer-spin",
+        kind: "skill",
+        name: "小转",
+        cost: BALANCE.heroes.dancer.spinCost,
+        power: 0,
+        defense: BALANCE.defenseGrades.small,
+        xpGain: 0,
+        text: `免费，本回合小防；将火刀及以下攻击转移给目标`,
+        effects: {
+          redirectIncoming: true,
+          redirectMaxPower: BALANCE.heroes.dancer.spinMaxPower,
+          singleTarget: true,
+        },
+      },
+      {
+        id: "dancer-grand-spin",
+        kind: "skill",
+        name: "大转",
+        cost: BALANCE.heroes.dancer.grandSpinCost,
+        power: 0,
+        defense: BALANCE.defenseGrades.small,
+        xpGain: 0,
+        text: `花费 ${BALANCE.heroes.dancer.grandSpinCost}，本回合小防；将 6 费及以下攻击转移给目标`,
+        effects: {
+          redirectIncoming: true,
+          redirectMaxPower: BALANCE.heroes.dancer.grandSpinMaxPower,
+          singleTarget: true,
+        },
+      },
+    ],
+    hooks: {
+      modifyXpGain(value, self, action) {
+        return action.id === "ji" ? BALANCE.heroes.dancer.jiXpGain : value;
+      },
+      onDealDamage(self, target, context) {
+        if (context.damage <= 0) return;
+        setStatus(target, {
+          id: "dancer-force-ji",
+          type: "negative",
+          name: "迷步",
+          text: "下回合强制 Ji",
+          turns: BALANCE.heroes.dancer.forceJiTurns,
+          fresh: true,
+        });
+        context.notes.push(`${target.label}被${self.label}击中，下回合强制出 Ji。`);
       },
     },
   },
@@ -469,6 +458,7 @@ const HEROES = {
           pointDefense: BALANCE.heroes.astrologer.drainPointDefense,
         },
       },
+
     ],
     hooks: {
       modifyDefense(value, self) {
@@ -494,14 +484,118 @@ const HEROES = {
       },
     },
   },
+    woodendummy:{
+    id: "woodendummy",
+    name: "wood",
+    maxHp: 20,
+    startingXp: 0,
+    description: "无额外机制，完全按童年规则结算。",
+    passives: [],
+    activeSkills: [],
+    hooks: {
+      modifyXpGain(value, self, action) {
+        return action.id === "ji" ? BALANCE.heroes.woodendummy.jiXpGain : value;
+      },
+    },
+  },
+  classic: {
+    id: "classic",
+    name: "经典武者",
+    maxHp: BALANCE.startingHp,
+    startingXp: BALANCE.startingXp,
+    description: "无额外机制，完全按童年规则结算。",
+    passives: [],
+    activeSkills: [],
+    hooks: {},
+  },
+
+  battery: {
+    id: "battery",
+    name: "聚气师",
+    maxHp: BALANCE.heroes.battery.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `连续使用 Ji 达到 ${BALANCE.heroes.battery.jiStreakRequired} 回合时，本回合额外获得 ${BALANCE.heroes.battery.bonusXp} XP。追索：本回合造成伤害后，结束阶段选择目标 -${BALANCE.heroes.battery.chaseXp} XP，或自己 +${BALANCE.heroes.battery.chaseXp} XP。`,
+    passives: [
+      { name: "聚气", text: `连续 Ji 后额外 +${BALANCE.heroes.battery.bonusXp} XP` },
+      { name: "追索", text: `造成伤害后结束阶段二选一` },
+    ],
+    activeSkills: [],
+    hooks: {
+      onDealDamage(self, target, context) {
+        if (context.damage <= 0) return;
+        self.flags.chaseTargets ||= [];
+        if (!self.flags.chaseTargets.includes(target)) self.flags.chaseTargets.push(target);
+      },
+      afterRound(self, opponent, context) {
+        if (context.selfAction.id !== "ji") {
+          self.flags.jiStreak = 0;
+          return;
+        }
+        self.flags.jiStreak = (self.flags.jiStreak || 0) + 1;
+        if (self.flags.jiStreak >= BALANCE.heroes.battery.jiStreakRequired) {
+          self.xp += BALANCE.heroes.battery.bonusXp;
+          context.notes.push(`${self.label}连续 Ji，额外获得 ${BALANCE.heroes.battery.bonusXp} XP。`);
+        }
+      },
+    },
+  },
+  balancedBot: {
+    id: "balancedBot",
+    name: "平衡bot",
+    maxHp: BALANCE.heroes.balancedBot.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `稳定型英雄，每次 Ji 获得 ${BALANCE.heroes.balancedBot.jiXpGain} XP。`,
+    passives: [{ name: "均衡", text: `Ji 获得 ${BALANCE.heroes.balancedBot.jiXpGain} XP` }],
+    activeSkills: [],
+    hooks: {
+      modifyXpGain(value, self, action) {
+        return action.id === "ji" ? BALANCE.heroes.balancedBot.jiXpGain : value;
+      },
+    },
+  },
+  guard: {
+    id: "guard",
+    name: "铁壁",
+    maxHp: BALANCE.heroes.guard.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `所有防御手势的防御值 +${BALANCE.heroes.guard.defenseBonus}。`,
+    passives: [{ name: "铁壁", text: `防御值 +${BALANCE.heroes.guard.defenseBonus}` }],
+    activeSkills: [],
+    hooks: {
+      modifyDefense(value, self, action) {
+        return action.kind === "defense" ? value + BALANCE.heroes.guard.defenseBonus : value;
+      },
+    },
+  },
+  breaker: {
+    id: "breaker",
+    name: "破阵手",
+    maxHp: BALANCE.heroes.breaker.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `使用 ${BALANCE.heroes.breaker.minAttackCost} 费及以上攻击时，攻击强度 +${BALANCE.heroes.breaker.attackBonus}。`,
+    passives: [{ name: "破阵", text: `${BALANCE.heroes.breaker.minAttackCost} 费以上攻击 +${BALANCE.heroes.breaker.attackBonus}` }],
+    activeSkills: [],
+    hooks: {
+      modifyAttack(value, self, action) {
+        return action.kind === "attack" && action.cost >= BALANCE.heroes.breaker.minAttackCost
+          ? value + BALANCE.heroes.breaker.attackBonus
+          : value;
+      },
+    },
+  },
 };
 
 const HERO_AVATARS = {
+  classic: "./pic/pixel-4.png",
   assassin: "./pic/assassin.png",
   astrologer: "./pic/astrologer.png",
   iceSorcerer: "./pic/icesorcerer.png",
   priest: "./pic/priest.png",
-  vaingloriousWarrior: "./pic/vangloriouswarrior.png",
+  vaingloriousWarrior: "./pic/vaingloriouswarrior.png",
+  vampire: "./pic/vampire.png",
+  werewolf: "./pic/werewolf1.png",
+  werewolfBerserk: "./pic/werewolf2.png",
+  dancer:"./pic/dancer.png"
 };
 
 const STORAGE_KEYS = {
@@ -510,6 +604,13 @@ const STORAGE_KEYS = {
 };
 const DEFAULT_PLAYER_NAME = "玩家";
 const MAX_HISTORY_RECORDS = 200;
+const SKILL_ANIMATION_TYPES = {
+  "priest-shield": "shield-skill",
+  "priest-heal": "heal",
+  "ice-dagger": "ice",
+  "astrologer-predict": "star",
+  "astrologer-drain": "drain",
+};
 
 const state = {
   round: 1,
@@ -521,6 +622,9 @@ const state = {
   pendingEndChoice: null,
   melee: {
     fighters: [],
+    openTargetId: "",
+    selectionKind: "",
+    targetSelections: new Map(),
   },
   online: {
     roomCode: "",
@@ -544,6 +648,7 @@ const ui = {
   playerName: document.querySelector("#playerName"),
   playerHero: document.querySelector("#playerHero"),
   enemyHero: document.querySelector("#enemyHero"),
+  enemyBHero: document.querySelector("#enemyBHero"),
   playerHeroName: document.querySelector("#playerHeroName"),
   enemyHeroName: document.querySelector("#enemyHeroName"),
   playerAvatar: document.querySelector("#playerAvatar"),
@@ -566,6 +671,8 @@ const ui = {
   enemyLast: document.querySelector("#enemyLast"),
   playerCard: document.querySelector("#playerCard"),
   enemyCard: document.querySelector("#enemyCard"),
+  playerEffects: document.querySelector("#playerEffects"),
+  enemyEffects: document.querySelector("#enemyEffects"),
   chargeActions: document.querySelector("#chargeActions"),
   defenseActions: document.querySelector("#defenseActions"),
   skillGroup: document.querySelector("#skillGroup"),
@@ -587,6 +694,7 @@ const ui = {
   meleePanel: document.querySelector("#meleePanel"),
   meleeGrid: document.querySelector("#meleeGrid"),
   meleeStatus: document.querySelector("#meleeStatus"),
+  meleeControl: document.querySelector("#meleeControl"),
   meleePrimaryActions: document.querySelector("#meleePrimaryActions"),
   meleeAttackAllocator: document.querySelector("#meleeAttackAllocator"),
   meleeTargetALabel: document.querySelector("#meleeTargetALabel"),
@@ -680,6 +788,9 @@ function resetGame() {
   state.player = makeFighter(playerName, ui.playerHero.value);
   state.enemy = makeFighter("电脑", ui.enemyHero.value);
   state.melee.fighters = [];
+  state.melee.openTargetId = "";
+  state.melee.selectionKind = "";
+  state.melee.targetSelections = new Map();
   ui.playerSideLabel.textContent = playerName;
   ui.enemySideLabel.textContent = "电脑";
   ui.playerLast.textContent = "等待出手";
@@ -696,11 +807,14 @@ function populateHeroes() {
   for (const hero of Object.values(HEROES)) {
     const playerOption = new Option(getHeroDisplayName(hero), hero.id);
     const enemyOption = new Option(getHeroDisplayName(hero), hero.id);
+    const enemyBOption = new Option(getHeroDisplayName(hero), hero.id);
     ui.playerHero.add(playerOption);
     ui.enemyHero.add(enemyOption);
+    ui.enemyBHero.add(enemyBOption);
   }
   ui.playerHero.value = "classic";
   ui.enemyHero.value = "guard";
+  ui.enemyBHero.value = "classic";
 }
 
 function renderActions() {
@@ -729,8 +843,8 @@ function render() {
   ui.roundNo.textContent = state.round;
   ui.playerHeroName.textContent = getHeroDisplayName(player.hero);
   ui.enemyHeroName.textContent = getHeroDisplayName(enemy.hero);
-  renderHeroAvatar(ui.playerAvatar, player.hero);
-  renderHeroAvatar(ui.enemyAvatar, enemy.hero);
+  renderHeroAvatar(ui.playerAvatar, player);
+  renderHeroAvatar(ui.enemyAvatar, enemy);
   renderHeroSummary(ui.playerHeroText, player.hero);
   renderHeroSummary(ui.enemyHeroText, enemy.hero);
   renderSkillActions(player);
@@ -813,7 +927,7 @@ function renderPassivePanel(fighter, panel, list) {
   for (const entry of entries) {
     const tag = document.createElement("span");
     tag.className = "status-tag";
-    tag.textContent = formatStatusTag(entry);
+    tag.textContent = formatStatusTag(entry, fighter);
     tag.title = entry.text ? `${entry.name}：${entry.text}` : entry.name;
     list.append(tag);
   }
@@ -849,14 +963,18 @@ function getHeroRuleEntries(hero) {
   return entries;
 }
 
-function renderHeroAvatar(container, hero) {
+function renderHeroAvatar(container, fighterOrHero) {
+  const hero = fighterOrHero.hero || fighterOrHero;
+  const isOut = fighterOrHero.hp <= 0;
   container.innerHTML = "";
   container.title = `查看${getHeroDisplayName(hero)}技能`;
-  const avatar = HERO_AVATARS[hero.id];
+  container.classList.toggle("is-out", isOut);
+  const avatar = getHeroAvatarSource(fighterOrHero);
   if (!avatar) {
     const fallback = document.createElement("span");
     fallback.textContent = "❓";
     container.append(fallback);
+    if (isOut) appendOutOverlay(container);
     return;
   }
 
@@ -868,12 +986,30 @@ function renderHeroAvatar(container, hero) {
     const fallback = document.createElement("span");
     fallback.textContent = "❓";
     container.append(fallback);
+    if (isOut) appendOutOverlay(container);
   };
   container.append(image);
+  if (isOut) appendOutOverlay(container);
 }
 
-function formatStatusTag(entry) {
+function getHeroAvatarSource(fighterOrHero) {
+  const hero = fighterOrHero.hero || fighterOrHero;
+  if (hero.id === "werewolf" && fighterOrHero.flags?.berserk) {
+    return HERO_AVATARS.werewolfBerserk;
+  }
+  return HERO_AVATARS[hero.id];
+}
+
+function appendOutOverlay(container) {
+  const overlay = document.createElement("span");
+  overlay.className = "out-overlay";
+  overlay.textContent = "OUT";
+  container.append(overlay);
+}
+
+function formatStatusTag(entry, fighter = null) {
   if (!entry.text) return entry.name;
+  if ((fighter?.hero?.passives || []).includes(entry)) return entry.name;
   if (entry.name === "寒冰碎片" && entry.text.includes("🧊")) return entry.text.replace(/\s+/g, "");
   if (entry.name === "寒冰碎片") return "碎片机制";
   if (entry.name === "Ji 连击" || entry.name === "Ji刀连出") return `${entry.name} ${entry.text}`;
@@ -1174,6 +1310,7 @@ function finishRound(report) {
   for (const item of report.logs) {
     addLog(item.text, item.kind);
   }
+  playRoundAnimations(report.animations || []);
 
   const pendingChoice = state.over ? null : applyAutomaticEndChoices(report.endChoices || []);
   if (pendingChoice && !state.over) {
@@ -1199,10 +1336,11 @@ function startMeleeGame() {
   const playerName = getCurrentPlayerName();
   state.player = makeFighter(playerName, ui.playerHero.value);
   state.enemy = makeFighter("电脑A", ui.enemyHero.value);
+  clearMeleeTargeting(true);
   state.melee.fighters = [
     makeMeleeFighter("p1", playerName, ui.playerHero.value, true),
     makeMeleeFighter("ai-a", "电脑A", ui.enemyHero.value, false),
-    makeMeleeFighter("ai-b", "电脑B", "classic", false),
+    makeMeleeFighter("ai-b", "电脑B", ui.enemyBHero.value, false),
   ];
   closeMeleeAttackAllocator();
   ui.battleLog.innerHTML = "";
@@ -1222,20 +1360,251 @@ function makeMeleeFighter(id, label, heroId, controlled) {
 function renderMelee() {
   const fighters = state.melee.fighters;
   ui.meleeGrid.innerHTML = "";
-  for (const fighter of fighters) {
-    const card = document.createElement("article");
-    card.className = `melee-fighter${fighter.hp <= 0 ? " is-out" : ""}`;
-    const passiveText = getFighterStatusEntries(fighter).map((entry) => entry.text ? `${entry.name}:${entry.text}` : entry.name).join(" / ");
-    card.innerHTML = `
-      <h3>${fighter.label}｜${fighter.hero.name}</h3>
-      <div class="melee-stats">HP ${formatHearts(fighter.hp)} ｜ XP ${fighter.xp}</div>
-      <div class="melee-stats">${passiveText || "无被动状态"}</div>
-      <div class="melee-last">${fighter.lastSummary}</div>
-    `;
-    ui.meleeGrid.append(card);
+  ui.meleeControl.hidden = true;
+  const player = fighters.find((fighter) => fighter.controlled);
+  const opponents = fighters.filter((fighter) => !fighter.controlled);
+  if (player) {
+    const playerRow = document.createElement("div");
+    playerRow.className = "melee-player-row";
+    playerRow.append(createMeleeFighterCard(player));
+    ui.meleeGrid.append(playerRow);
   }
-  renderMeleeTargets();
+  const opponentRow = document.createElement("div");
+  opponentRow.className = "melee-opponent-row";
+  for (const fighter of opponents) {
+    opponentRow.append(createMeleeFighterCard(fighter));
+  }
+  ui.meleeGrid.append(opponentRow);
   ui.meleeStatus.textContent = state.over ? "混战结束" : "1 真人 + 2 电脑";
+}
+
+function createMeleeFighterCard(fighter) {
+  const card = document.createElement("article");
+  const isPlayer = fighter.controlled;
+  const isOpenTarget = state.melee.openTargetId === fighter.id;
+  card.className = `melee-fighter${fighter.hp <= 0 ? " is-out" : ""}${isPlayer ? " is-player" : " is-targetable"}${isOpenTarget ? " is-open" : ""}`;
+  card.dataset.fighterId = fighter.id;
+
+  const head = document.createElement("div");
+  head.className = "melee-card-head";
+  const identity = document.createElement("div");
+  identity.className = "melee-identity";
+  const role = document.createElement("span");
+  role.className = "side-label";
+  role.textContent = isPlayer ? "玩家" : fighter.label;
+  const name = document.createElement("h3");
+  name.textContent = getHeroDisplayName(fighter.hero);
+  identity.append(role);
+  identity.append(name);
+  head.append(identity);
+
+  const avatar = document.createElement("button");
+  avatar.className = "hero-avatar melee-avatar";
+  avatar.type = "button";
+  avatar.ariaLabel = `查看${fighter.label}英雄技能`;
+  renderHeroAvatar(avatar, fighter);
+  avatar.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openHeroDetail(fighter);
+  });
+  head.append(avatar);
+  if (isPlayer) {
+    head.append(createMeleeSubmitDock(fighter));
+  }
+  card.append(head);
+
+  if (!isPlayer && isOpenTarget && fighter.hp > 0) {
+    card.addEventListener("click", (event) => {
+      if (event.target.closest?.(".melee-target-menu, .hero-avatar")) return;
+      toggleMeleeTargetMenu(fighter.id);
+    });
+    renderMeleeTargetMenu(card, fighter);
+    return card;
+  }
+
+  const stats = document.createElement("div");
+  stats.className = "melee-stat-lines";
+  stats.innerHTML = `
+    <div><b>HP</b><span>${formatHearts(fighter.hp)}</span></div>
+    <div><b>XP</b><span>${fighter.xp}</span></div>
+  `;
+  card.append(stats);
+
+  const passiveText = getFighterStatusEntries(fighter).map((entry) => formatStatusTag(entry, fighter)).join(" / ");
+  const status = document.createElement("div");
+  status.className = "melee-stats";
+  status.textContent = passiveText || "无被动状态";
+  card.append(status);
+
+  if (isPlayer) {
+    renderMeleePlayerActions(card, fighter);
+  } else if (fighter.hp > 0) {
+    card.addEventListener("click", (event) => {
+      if (event.target.closest?.(".melee-target-menu, .hero-avatar")) return;
+      toggleMeleeTargetMenu(fighter.id);
+    });
+    renderMeleeTargetSummary(card, fighter);
+    if (isOpenTarget) renderMeleeTargetMenu(card, fighter);
+  }
+
+  const last = document.createElement("div");
+  last.className = "melee-last";
+  last.textContent = fighter.lastSummary;
+  card.append(last);
+  return card;
+}
+
+function renderMeleePlayerActions(card, player) {
+  const actions = document.createElement("div");
+  actions.className = "melee-card-actions";
+  for (const action of [ACTION_BY_ID.ji, ...ACTIONS.filter((item) => item.kind === "defense")]) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = action.name;
+    button.disabled = state.over || player.hp <= 0 || !canUseAction(player, action);
+    button.addEventListener("click", () => submitMeleeBasic(action.id));
+    actions.append(button);
+  }
+  card.append(actions);
+
+  const selections = getMeleeSelections();
+  if (!selections.length) return;
+
+  const summary = document.createElement("div");
+  summary.className = "melee-selection-summary";
+  summary.textContent = `${state.melee.selectionKind === "skill" ? "技能" : "攻击"}：${selections.map((entry) => `${entry.action.name}->${getMeleeFighterLabel(entry.targetId)}`).join("，")}（${getMeleeSelectionCost()} XP）`;
+  card.append(summary);
+}
+
+function createMeleeSubmitDock(player) {
+  const dock = document.createElement("div");
+  dock.className = "melee-submit-dock";
+  const selections = getMeleeSelections();
+  if (!selections.length) {
+    dock.classList.add("is-empty");
+    return dock;
+  }
+  const clearButton = document.createElement("button");
+  clearButton.type = "button";
+  clearButton.textContent = "清空";
+  clearButton.addEventListener("click", clearMeleeTargeting);
+  const submitButton = document.createElement("button");
+  submitButton.type = "button";
+  submitButton.textContent = state.melee.selectionKind === "skill" ? "提交技能" : "提交攻击";
+  submitButton.disabled = state.over || player.hp <= 0;
+  submitButton.addEventListener("click", submitMeleeTargetSelections);
+  dock.append(clearButton);
+  dock.append(submitButton);
+  return dock;
+}
+
+function renderMeleeTargetSummary(card, fighter) {
+  const selection = state.melee.targetSelections.get(fighter.id);
+  if (!selection) return;
+  const tag = document.createElement("div");
+  tag.className = "melee-selected-tag";
+  tag.textContent = `已选：${selection.action.name}`;
+  card.append(tag);
+}
+
+function renderMeleeTargetMenu(card, target) {
+  const player = getMeleePlayer();
+  const menu = document.createElement("div");
+  menu.className = "melee-target-menu";
+  appendMeleeTargetSection(menu, "攻击", getMeleeAttackChoices(player), target, "attack");
+  appendMeleeTargetSection(menu, "技能", getMeleeSkillChoices(player), target, "skill");
+  card.append(menu);
+}
+
+function appendMeleeTargetSection(menu, title, actions, target, kind) {
+  const section = document.createElement("section");
+  section.className = "melee-target-section";
+  const heading = document.createElement("div");
+  heading.className = "mini-title";
+  heading.textContent = title;
+  section.append(heading);
+
+  const grid = document.createElement("div");
+  grid.className = "melee-target-actions";
+  if (!actions.length) {
+    const empty = document.createElement("div");
+    empty.className = "melee-empty";
+    empty.textContent = "无可用";
+    grid.append(empty);
+  }
+  for (const action of actions) {
+    grid.append(createMeleeTargetActionButton(action, target, kind));
+  }
+  section.append(grid);
+  menu.append(section);
+}
+
+function createMeleeTargetActionButton(action, target, kind) {
+  const player = getMeleePlayer();
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `action-card ${kind === "skill" ? "skill" : "attack"}`;
+  const selected = state.melee.targetSelections.get(target.id)?.action.id === action.id;
+  const incompatible = state.melee.selectionKind && state.melee.selectionKind !== kind;
+  const totalIfSelected = getMeleeSelectionCost(target.id) + (selected ? 0 : getCost(player, action));
+  button.innerHTML = `<strong>${action.name}</strong><span>${describeAction(action, player)}</span>`;
+  button.disabled = state.over || player.hp <= 0 || target.hp <= 0 || incompatible || totalIfSelected > player.xp || !canUseAction(player, action);
+  button.classList.toggle("selected", selected);
+  button.addEventListener("click", () => toggleMeleeTargetAction(target.id, action.id, kind));
+  return button;
+}
+
+function getMeleeAttackChoices(player) {
+  return ACTIONS.filter((action) => action.kind === "attack" && canUseAction(player, action));
+}
+
+function getMeleeSkillChoices(player) {
+  return getHeroActions(player).filter((action) => canUseAction(player, action));
+}
+
+function toggleMeleeTargetMenu(targetId) {
+  if (state.mode !== "melee" || state.over) return;
+  state.melee.openTargetId = state.melee.openTargetId === targetId ? "" : targetId;
+  render();
+}
+
+function toggleMeleeTargetAction(targetId, actionId, kind) {
+  const player = getMeleePlayer();
+  const action = getActionById(actionId, player);
+  if (!action || !canUseAction(player, action)) return;
+  if (state.melee.selectionKind && state.melee.selectionKind !== kind) return;
+
+  const existing = state.melee.targetSelections.get(targetId);
+  if (existing?.action.id === action.id) {
+    state.melee.targetSelections.delete(targetId);
+  } else {
+    state.melee.selectionKind ||= kind;
+    if (kind === "skill" && action.effects?.singleTarget) {
+      state.melee.targetSelections.clear();
+    }
+    state.melee.targetSelections.set(targetId, { targetId, action });
+  }
+
+  if (!state.melee.targetSelections.size) state.melee.selectionKind = "";
+  render();
+}
+
+function clearMeleeTargeting(skipRender = false) {
+  state.melee.openTargetId = "";
+  state.melee.selectionKind = "";
+  state.melee.targetSelections = new Map();
+  if (state.mode === "melee" && !skipRender) render();
+}
+
+function getMeleeSelections() {
+  return Array.from(state.melee.targetSelections.values());
+}
+
+function getMeleeSelectionCost(excludeTargetId = "") {
+  const player = getMeleePlayer();
+  return getMeleeSelections()
+    .filter((entry) => entry.targetId !== excludeTargetId)
+    .reduce((sum, entry) => sum + getCost(player, entry.action), 0);
 }
 
 function renderMeleeTargets() {
@@ -1323,6 +1692,41 @@ function submitMeleeAttacks() {
   resolveMeleeRound(new Map([[player.id, { fighter: player, action, summaryAction: action }]]));
 }
 
+function submitMeleeTargetSelections() {
+  if (state.mode !== "melee" || state.over) return;
+  const player = getMeleePlayer();
+  const selections = getMeleeSelections();
+  if (!player || player.hp <= 0 || !selections.length) return;
+
+  const totalCost = getMeleeSelectionCost();
+  if (totalCost > player.xp) {
+    addLog(`本回合选择需要 ${totalCost} XP，你当前只有 ${player.xp} XP。`);
+    return;
+  }
+
+  const action = state.melee.selectionKind === "skill"
+    ? {
+      id: "melee-multiskill",
+      kind: "multitarget-skill",
+      name: "指向技能",
+      cost: totalCost,
+      defense: selections.reduce((best, entry) => Math.max(best, getDefense(player, entry.action)), 0),
+      xpGain: 0,
+      entries: selections,
+    }
+    : {
+      id: "melee-multiattack",
+      kind: "multiattack",
+      name: "分配攻击",
+      cost: totalCost,
+      defense: 0,
+      xpGain: 0,
+      attacks: selections,
+    };
+  clearMeleeTargeting(true);
+  resolveMeleeRound(new Map([[player.id, { fighter: player, action, summaryAction: action }]]));
+}
+
 function resolveMeleeRound(playerPlans) {
   const fighters = state.melee.fighters.filter((fighter) => fighter.hp > 0);
   const plans = new Map(playerPlans);
@@ -1338,10 +1742,15 @@ function resolveMeleeRound(playerPlans) {
   }
 
   for (const plan of plans.values()) {
+    plan.action = applyForcedAction(plan.fighter, plan.action, logs);
+    plan.summaryAction = plan.action;
+  }
+
+  for (const plan of plans.values()) {
     plan.context = { selfAction: plan.action, opponentAction: ACTION_BY_ID.ji, notes: [], hit: false, damageDealt: 0 };
     plan.fighter.xp -= getMeleeActionCost(plan.fighter, plan.action);
     plan.fighter.xp += getXpGain(plan.fighter, plan.action);
-    applyPreDamageEffects(plan.fighter, plan.action, logs);
+    applyMeleePreActionEffects(plan, logs);
   }
 
   const defenses = new Map();
@@ -1349,7 +1758,10 @@ function resolveMeleeRound(playerPlans) {
     defenses.set(plan.fighter.id, getDefense(plan.fighter, plan.action));
   }
 
-  for (const intent of getMeleeAttackIntents(plans)) {
+  applyMeleeTargetSkillEffects(plans, defenses, logs);
+
+  const meleeHits = [];
+  for (const intent of getRedirectedMeleeAttackIntents(getMeleeAttackIntents(plans), plans, defenses, logs)) {
     const target = state.melee.fighters.find((fighter) => fighter.id === intent.targetId);
     if (!target || target.hp <= 0 || intent.source.hp <= 0) continue;
     const targetPlan = plans.get(target.id);
@@ -1358,14 +1770,15 @@ function resolveMeleeRound(playerPlans) {
     if (attack > defense) {
       const sourcePlan = plans.get(intent.source.id);
       sourcePlan.context.hit = true;
-      sourcePlan.context.damageDealt += dealDamage(intent.source, target, intent.action, `${intent.source.label}用 ${intent.action.name} 攻击${target.label}，击穿防御 ${formatDefense(defense)}，${target.label} HP -1。`, logs, notes, null);
+      meleeHits.push({ ...intent, target, sourcePlan, defense, attack });
     } else {
       logs.push({ text: `${intent.source.label}用 ${intent.action.name} 攻击${target.label}，强度 ${attack} 未超过防御 ${formatDefense(defense)}。` });
     }
   }
+  applyMeleeHitDamage(meleeHits, logs, notes);
 
   for (const plan of plans.values()) {
-    runHook(plan.fighter, "afterRound", plan.fighter, null, plan.context);
+    runMeleeAfterRoundHooks(plan);
     tickStatuses(plan.fighter, plan.context.notes);
     plan.fighter.lastSummary = summarizeMeleeAction(plan.fighter, plan.action, defenses.get(plan.fighter.id) || 0);
   }
@@ -1387,6 +1800,50 @@ function resolveMeleeRound(playerPlans) {
   render();
 }
 
+function applyMeleePreActionEffects(plan, logs) {
+  if (plan.action.kind === "multitarget-skill") {
+    for (const entry of plan.action.entries) {
+      const target = state.melee.fighters.find((fighter) => fighter.id === entry.targetId);
+      applyPreDamageEffects(plan.fighter, entry.action, logs, target || plan.fighter);
+    }
+    return;
+  }
+  applyPreDamageEffects(plan.fighter, plan.action, logs);
+}
+
+function applyMeleeTargetSkillEffects(plans, defenses, logs) {
+  for (const plan of plans.values()) {
+    if (plan.action.kind !== "multitarget-skill") continue;
+    for (const entry of plan.action.entries) {
+      if (entry.action.kind !== "skill") continue;
+      const target = state.melee.fighters.find((fighter) => fighter.id === entry.targetId);
+      if (!target || target.hp <= 0 || plan.fighter.hp <= 0) continue;
+      const targetPlan = plans.get(target.id);
+      applyTargetedDefenseSkillEffects(plan.fighter, entry.action, target, defenses, logs);
+      const targetDefense = targetPlan ? getIncomingDefense(target, targetPlan.action, plan.fighter) : defenses.get(target.id) || 0;
+      applyPostDefenseSkillEffects(plan.fighter, entry.action, target, targetDefense, logs);
+    }
+  }
+}
+
+function applyTargetedDefenseSkillEffects(actor, action, target, defenses, logs) {
+  if (!action.effects?.upgradeDefense) return;
+  const before = defenses.get(target.id) || 0;
+  const upgraded = upgradeDefenseValue(before);
+  defenses.set(target.id, upgraded);
+  logs.push({ text: `${actor.label}使用 ${action.name}，令${target.label}本回合防御提升为 ${formatDefense(upgraded)}。` });
+}
+
+function runMeleeAfterRoundHooks(plan) {
+  if (plan.action.kind === "multitarget-skill") {
+    for (const entry of plan.action.entries) {
+      runHook(plan.fighter, "afterRound", plan.fighter, null, { ...plan.context, selfAction: entry.action });
+    }
+    return;
+  }
+  runHook(plan.fighter, "afterRound", plan.fighter, null, plan.context);
+}
+
 function getMeleeAttackIntents(plans) {
   const intents = [];
   for (const plan of plans.values()) {
@@ -1394,11 +1851,56 @@ function getMeleeAttackIntents(plans) {
       for (const attack of plan.action.attacks) {
         intents.push({ source: plan.fighter, targetId: attack.targetId, action: attack.action });
       }
+    } else if (plan.action.kind === "multitarget-skill") {
+      for (const entry of plan.action.entries) {
+        if (entry.action.kind === "attack") intents.push({ source: plan.fighter, targetId: entry.targetId, action: entry.action });
+      }
     } else if (plan.action.kind === "attack" && plan.action.targetId) {
       intents.push({ source: plan.fighter, targetId: plan.action.targetId, action: plan.action });
     }
   }
   return intents;
+}
+
+function getRedirectedMeleeAttackIntents(intents, plans, defenses, logs) {
+  return intents.map((intent) => {
+    const targetPlan = plans.get(intent.targetId);
+    if (!targetPlan?.action || targetPlan.action.kind !== "multitarget-skill") return intent;
+    const redirect = targetPlan.action.entries.find((entry) => entry.action.effects?.redirectIncoming);
+    if (!redirect || redirect.targetId === intent.source.id) return intent;
+    const originalTarget = targetPlan.fighter;
+    const redirectTarget = state.melee.fighters.find((fighter) => fighter.id === redirect.targetId);
+    if (!redirectTarget || redirectTarget.hp <= 0) return intent;
+    const incomingPower = getAttack(intent.source, intent.action, originalTarget);
+    if (incomingPower > redirect.action.effects.redirectMaxPower) return intent;
+    logs.push({ text: `${originalTarget.label}使用 ${redirect.action.name}，将${intent.source.label}的 ${intent.action.name} 转移给${redirectTarget.label}。` });
+    return { ...intent, targetId: redirectTarget.id, redirectedFromId: originalTarget.id };
+  });
+}
+
+function applyMeleeHitDamage(hits, logs, notes) {
+  const hitsByTarget = new Map();
+  for (const hit of hits) {
+    const context = { action: hit.action, damage: 1, notes };
+    const damage = getDamage(hit.source, hit.target, hit.action, context);
+    context.damage = damage;
+    hit.damage = damage;
+    hit.context = context;
+    hit.sourcePlan.context.damageDealt += damage;
+    runHook(hit.source, "onDealDamage", hit.source, hit.target, context);
+    if (!hitsByTarget.has(hit.target.id)) hitsByTarget.set(hit.target.id, []);
+    hitsByTarget.get(hit.target.id).push(hit);
+    logs.push({ kind: "impact", text: `${hit.source.label}用 ${hit.action.name} 攻击${hit.target.label}，击穿防御 ${formatDefense(hit.defense)}，形成 ${damage} 点伤害。` });
+  }
+
+  for (const targetHits of hitsByTarget.values()) {
+    const target = targetHits[0].target;
+    const maxDamage = Math.max(...targetHits.map((hit) => hit.damage));
+    const strongestHit = targetHits.find((hit) => hit.damage === maxDamage);
+    target.hp -= maxDamage;
+    logs.push({ kind: "impact", text: `${target.label}本回合受到的最高伤害为 ${maxDamage}，HP -${maxDamage}。` });
+    runHook(target, "afterTakeDamage", target, strongestHit.source, { action: strongestHit.action, damage: maxDamage, notes });
+  }
 }
 
 function chooseMeleeAiAction(fighter) {
@@ -1412,12 +1914,13 @@ function chooseMeleeAiAction(fighter) {
     const action = { ...affordableAttacks[0], targetId: target.id };
     return action;
   }
-  if (fighter.xp > 0 && Math.random() > 0.55) return ACTION_BY_ID["def-small"];
+  if (fighter.xp > 0 && Math.random() > 0.55 && canUseAction(fighter, ACTION_BY_ID["def-small"])) return ACTION_BY_ID["def-small"];
   return ACTION_BY_ID.ji;
 }
 
 function getMeleeActionCost(fighter, action) {
   if (action.kind === "multiattack") return action.cost;
+  if (action.kind === "multitarget-skill") return action.cost;
   return getCost(fighter, action);
 }
 
@@ -1425,6 +1928,10 @@ function summarizeMeleeAction(fighter, action, defense) {
   if (action.kind === "multiattack") {
     const parts = action.attacks.map((attack) => `${attack.action.name}->${getMeleeFighterLabel(attack.targetId)}`);
     return `分配攻击：${parts.join("，")}（花费 ${action.cost}）`;
+  }
+  if (action.kind === "multitarget-skill") {
+    const parts = action.entries.map((entry) => `${entry.action.name}->${getMeleeFighterLabel(entry.targetId)}`);
+    return `指向技能：${parts.join("，")}（花费 ${action.cost}）`;
   }
   if (action.kind === "charge") return `${action.name}：XP +${getXpGain(fighter, action)}`;
   if (action.kind === "defense") return `${action.name}：防御 ${formatDefense(defense)}`;
@@ -1460,6 +1967,7 @@ function canAfford(fighter, action) {
 }
 
 function canUseAction(fighter, action) {
+  if (isForcedToJi(fighter) && action.id !== "ji") return false;
   if (!canAfford(fighter, action)) return false;
   return Boolean(runHook(fighter, "canUseAction", action, fighter));
 }
@@ -1470,6 +1978,16 @@ function getActionById(actionId, fighter) {
 
 function getHeroActions(fighter) {
   return fighter?.hero?.activeSkills || [];
+}
+
+function isForcedToJi(fighter) {
+  return hasStatus(fighter, "dancer-force-ji");
+}
+
+function applyForcedAction(fighter, action, logs) {
+  if (!isForcedToJi(fighter) || action.id === "ji") return action;
+  logs.push({ text: `${fighter.label}受到迷步影响，本回合强制出 Ji。` });
+  return ACTION_BY_ID.ji;
 }
 
 function getAvailableActions(fighter) {
@@ -1561,6 +2079,8 @@ function resolveRound(playerAction, enemyAction) {
   const logs = [];
   clearRoundPhaseFlags(player);
   clearRoundPhaseFlags(enemy);
+  playerAction = applyForcedAction(player, playerAction, logs);
+  enemyAction = applyForcedAction(enemy, enemyAction, logs);
   const contextForPlayer = { selfAction: playerAction, opponentAction: enemyAction, notes: [], hit: false, damageDealt: 0 };
   const contextForEnemy = { selfAction: enemyAction, opponentAction: playerAction, notes: [], hit: false, damageDealt: 0 };
 
@@ -1640,6 +2160,16 @@ function resolveRound(playerAction, enemyAction) {
   const endChoices = collectEndPhaseChoices([player, enemy]);
   const playerSummary = summarizeAction(player, playerAction, playerAttack, playerDefense, playerXpGain);
   const enemySummary = summarizeAction(enemy, enemyAction, enemyAttack, enemyDefense, enemyXpGain);
+  const animations = buildDuelAnimations({
+    playerAction,
+    enemyAction,
+    playerAttack,
+    enemyAttack,
+    playerDefense,
+    enemyDefense,
+    contextForPlayer,
+    contextForEnemy,
+  });
 
   if (player.hp <= 0 && enemy.hp <= 0) {
     state.over = true;
@@ -1654,7 +2184,54 @@ function resolveRound(playerAction, enemyAction) {
     logs.push({ text: "双方都没有造成伤害。" });
   }
 
-  return { logs, playerSummary, enemySummary, endChoices };
+  return { logs, playerSummary, enemySummary, endChoices, animations };
+}
+
+function buildDuelAnimations(round) {
+  return [
+    buildActionAnimation("player", "enemy", round.playerAction, round.playerAttack, round.playerDefense, round.contextForPlayer),
+    buildActionAnimation("enemy", "player", round.enemyAction, round.enemyAttack, round.enemyDefense, round.contextForEnemy),
+  ].filter(Boolean);
+}
+
+function buildActionAnimation(side, targetSide, action, attack, defense, context) {
+  if (!action) return null;
+  const specialType = SKILL_ANIMATION_TYPES[action.id];
+  if (action.kind === "charge") {
+    return { side, targetSide, type: "charge", label: `+${getXpGain(side === "player" ? state.player : state.enemy, action)} XP` };
+  }
+  if (action.kind === "defense") {
+    return { side, targetSide, type: "defense", label: formatDefense(defense) };
+  }
+  if (specialType) {
+    return {
+      side,
+      targetSide,
+      type: specialType,
+      label: action.name,
+      outcome: context.hit ? "hit" : action.kind === "attack" ? "blocked" : "cast",
+    };
+  }
+  if (action.kind === "attack") {
+    return {
+      side,
+      targetSide,
+      type: "attack",
+      label: action.name,
+      outcome: context.hit ? "hit" : "blocked",
+      power: attack,
+    };
+  }
+  if (action.kind === "skill") {
+    return {
+      side,
+      targetSide,
+      type: "skill",
+      label: action.name,
+      outcome: context.hit ? "hit" : "cast",
+    };
+  }
+  return null;
 }
 
 function dealDamage(attacker, defender, action, text, logs, damageNotes, defenderCard) {
@@ -1784,6 +2361,11 @@ function getPointDefenseAgainst(fighter, action, target) {
       .filter((attack) => attack.targetId === target.id)
       .reduce((best, attack) => Math.max(best, getAttack(fighter, attack.action, target)), 0);
   }
+  if (action.kind === "multitarget-skill") {
+    return action.entries
+      .filter((entry) => entry.targetId === target.id)
+      .reduce((best, entry) => Math.max(best, entry.action.effects?.pointDefense || 0), 0);
+  }
   if (action.kind === "attack" && (!action.targetId || action.targetId === target.id)) {
     return getAttack(fighter, action, target);
   }
@@ -1868,27 +2450,28 @@ function tickStatuses(fighter, notes) {
   fighter.statuses = remaining;
 }
 
-function applyPreDamageEffects(fighter, action, logs) {
+function applyPreDamageEffects(fighter, action, logs, target = fighter) {
   if (action.kind !== "skill") return;
   const effects = action.effects || {};
   const details = [];
+  const targetLabel = target === fighter ? "" : `，目标 ${target.label}`;
 
   if (effects.clearNegative) {
-    const before = fighter.statuses.length;
-    fighter.statuses = fighter.statuses.filter((status) => status.type !== "negative");
-    const removed = before - fighter.statuses.length;
+    const before = target.statuses.length;
+    target.statuses = target.statuses.filter((status) => status.type !== "negative");
+    const removed = before - target.statuses.length;
     if (removed > 0) details.push(`移除 ${removed} 个负面效果`);
   }
 
   if (effects.heal) {
-    const beforeHp = fighter.hp;
-    fighter.hp = Math.min(fighter.maxHp, fighter.hp + effects.heal);
-    details.push(`回复 ${fighter.hp - beforeHp} HP`);
+    const beforeHp = target.hp;
+    target.hp = Math.min(target.maxHp, target.hp + effects.heal);
+    details.push(`回复 ${target.hp - beforeHp} HP`);
   }
 
   if (effects.upgradeDefense) details.push("本回合防御升一大级");
-  if (effects.invincible) details.push("本回合无敌");
-  logs.push({ text: details.length ? `${fighter.label}使用 ${action.name}，${details.join("，")}。` : `${fighter.label}使用 ${action.name}。` });
+  if (effects.invincible && target === fighter) details.push("本回合无敌");
+  logs.push({ text: details.length ? `${fighter.label}使用 ${action.name}${targetLabel}，${details.join("，")}。` : `${fighter.label}使用 ${action.name}${targetLabel}。` });
 }
 
 function upgradeDefenseValue(value) {
@@ -1918,6 +2501,114 @@ function addLog(text, kind = "") {
   if (kind) item.className = kind;
   item.textContent = `R${state.round}｜${text}`;
   ui.battleLog.prepend(item);
+}
+
+function playRoundAnimations(animations) {
+  if (!canPlayAnimations()) return;
+  animations.forEach((animation, index) => {
+    window.setTimeout(() => playActionAnimation(animation), index * 90);
+  });
+}
+
+function canPlayAnimations() {
+  return Boolean(ui.playerEffects && ui.enemyEffects && typeof window.setTimeout === "function");
+}
+
+function playActionAnimation(animation) {
+  const source = getEffectLayer(animation.side);
+  const target = getEffectLayer(animation.targetSide);
+  if (!source || !target) return;
+
+  if (animation.type === "charge") {
+    addPixelEffect(source, "pixel-charge", animation.label || "+XP");
+    return;
+  }
+
+  if (animation.type === "defense") {
+    addPixelEffect(source, "pixel-shield", animation.label || "DEF");
+    return;
+  }
+
+  if (animation.type === "attack") {
+    addPixelEffect(source, "pixel-windup", animation.label || "ATK");
+    if (!addDirectionalEffect(animation, "pixel-slash pixel-travel", "")) {
+      addPixelEffect(target, `pixel-slash ${animation.side === "player" ? "from-left" : "from-right"}`, "");
+    }
+    addPixelEffect(target, animation.outcome === "hit" ? "pixel-hit" : "pixel-block", animation.outcome === "hit" ? "HIT" : "BLOCK");
+    return;
+  }
+
+  const skillLabel = getSkillAnimationLabel(animation);
+  addPixelEffect(source, `pixel-skill pixel-skill-${animation.type}`, skillLabel);
+  if (isTargetedAnimation(animation.type)) {
+    addDirectionalEffect(animation, `pixel-skill-shot pixel-skill-${animation.type}`, skillLabel);
+    if (animation.outcome === "blocked") addPixelEffect(target, "pixel-block", "BLOCK");
+  }
+  if (animation.outcome === "hit") addPixelEffect(target, "pixel-hit", "HIT");
+}
+
+function isTargetedAnimation(type) {
+  return ["attack", "ice", "drain", "star"].includes(type);
+}
+
+function getSkillAnimationLabel(animation) {
+  if (animation.type === "heal") return "HP";
+  if (animation.type === "ice") return "ICE";
+  if (animation.type === "drain") return "XP";
+  if (animation.type === "star") return "STAR";
+  if (animation.type === "shield-skill") return "DEF";
+  return animation.label || "SKILL";
+}
+
+function getEffectLayer(side) {
+  return side === "player" ? ui.playerEffects : ui.enemyEffects;
+}
+
+function getFighterCard(side) {
+  return side === "player" ? ui.playerCard : ui.enemyCard;
+}
+
+function addDirectionalEffect(animation, className, text) {
+  const stage = ui.fighterGrid;
+  const sourceCard = getFighterCard(animation.side);
+  const targetCard = getFighterCard(animation.targetSide);
+  if (!stage || !sourceCard || !targetCard || typeof stage.getBoundingClientRect !== "function") return false;
+
+  const stageRect = stage.getBoundingClientRect();
+  const sourceRect = sourceCard.getBoundingClientRect();
+  const targetRect = targetCard.getBoundingClientRect();
+  if (!stageRect.width || !sourceRect.width || !targetRect.width) return false;
+
+  const sourceX = sourceRect.left + sourceRect.width / 2 - stageRect.left;
+  const sourceY = sourceRect.top + sourceRect.height * 0.42 - stageRect.top;
+  const targetX = targetRect.left + targetRect.width / 2 - stageRect.left;
+  const targetY = targetRect.top + targetRect.height * 0.42 - stageRect.top;
+  const effect = document.createElement("span");
+  effect.className = `pixel-effect ${className} ${animation.side === "player" ? "travel-right" : "travel-left"}`;
+  effect.textContent = text;
+  effect.style.left = `${sourceX}px`;
+  effect.style.top = `${sourceY}px`;
+  effect.style.setProperty("--travel-x", `${targetX - sourceX}px`);
+  effect.style.setProperty("--travel-y", `${targetY - sourceY}px`);
+  stage.append(effect);
+  window.setTimeout(() => removeEffect(effect), 820);
+  return true;
+}
+
+function addPixelEffect(layer, className, text) {
+  const effect = document.createElement("span");
+  effect.className = `pixel-effect ${className}`;
+  effect.textContent = text;
+  layer.append(effect);
+  window.setTimeout(() => removeEffect(effect), 820);
+}
+
+function removeEffect(effect) {
+  if (typeof effect.remove === "function") {
+    effect.remove();
+  } else if (effect.parentNode) {
+    effect.parentNode.removeChild(effect);
+  }
 }
 
 function flash(element) {
@@ -2093,6 +2784,7 @@ async function applyOnlineResult(result) {
   for (const item of report.logs) {
     addLog(item.text, item.kind);
   }
+  playRoundAnimations(report.animations || []);
   if (!state.over) applyAutomaticEndChoices(report.endChoices || []);
   state.online.appliedRounds.add(result.round);
   state.online.pendingActionId = "";
@@ -2122,6 +2814,15 @@ function normalizeRoomCode(value) {
 
 function updateRoomStatus(text) {
   ui.roomStatus.textContent = text;
+}
+
+function handleMeleeKeyboardSubmit(event) {
+  if (event.key !== "Enter" || event.isComposing) return;
+  if (state.mode !== "melee" || state.over || !getMeleeSelections().length) return;
+  const tagName = event.target?.tagName;
+  if (tagName === "INPUT" || tagName === "SELECT" || tagName === "TEXTAREA") return;
+  event.preventDefault();
+  submitMeleeTargetSelections();
 }
 
 async function apiGet(path) {
@@ -2156,6 +2857,7 @@ ui.meleeDefBtn.addEventListener("click", () => submitMeleeBasic("def-small"));
 ui.meleeAttackModeBtn.addEventListener("click", openMeleeAttackAllocator);
 ui.meleeBackBtn.addEventListener("click", closeMeleeAttackAllocator);
 ui.meleeSubmitBtn.addEventListener("click", submitMeleeAttacks);
+document.addEventListener("keydown", handleMeleeKeyboardSubmit);
 ui.chaseDrainBtn.addEventListener("click", () => resolvePendingEndChoice("drain"));
 ui.chaseGainBtn.addEventListener("click", () => resolvePendingEndChoice("gain"));
 ui.manualBtn.addEventListener("click", openManualDetail);
@@ -2189,9 +2891,14 @@ ui.clearLogBtn.addEventListener("click", () => {
 });
 ui.playerHero.addEventListener("change", () => {
   if (state.mode === "cpu") resetGame();
+  if (state.mode === "melee") startMeleeGame();
 });
 ui.enemyHero.addEventListener("change", () => {
   if (state.mode === "cpu") resetGame();
+  if (state.mode === "melee") startMeleeGame();
+});
+ui.enemyBHero.addEventListener("change", () => {
+  if (state.mode === "melee") startMeleeGame();
 });
 ui.playerName.addEventListener("change", savePlayerName);
 ui.playerName.addEventListener("blur", savePlayerName);

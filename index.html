@@ -50,6 +50,7 @@
               <div class="tag-list" id="playerPassives"></div>
             </div>
             <div class="last-action" id="playerLast">等待出手</div>
+            <div class="fighter-effects" id="playerEffects" aria-hidden="true"></div>
           </article>
 
           <div class="versus" aria-hidden="true">
@@ -84,6 +85,7 @@
               <div class="tag-list" id="enemyPassives"></div>
             </div>
             <div class="last-action" id="enemyLast">等待出手</div>
+            <div class="fighter-effects" id="enemyEffects" aria-hidden="true"></div>
           </article>
         </section>
 
@@ -130,6 +132,10 @@
             <label>
               电脑英雄
               <select id="enemyHero"></select>
+            </label>
+            <label>
+              电脑B英雄
+              <select id="enemyBHero"></select>
             </label>
             <button class="icon-button" id="resetBtn" title="重新开局" aria-label="重新开局">
               <svg viewBox="0 0 24 24" aria-hidden="true">
