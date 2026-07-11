@@ -21,16 +21,30 @@ const BALANCE = {
       "def-big": { name: "大防", cost: 2, defense: 10 },
     },
     attacks: [
-      { id: "atk-1", name: "小刀", cost: 1, power: 1 },
-      { id: "atk-2", name: "大刀", cost: 2, power: 2 },
-      { id: "atk-3", name: "冰刀", cost: 3, power: 3 },
-      { id: "atk-4", name: "火刀", cost: 4, power: 4 },
-      { id: "atk-5", name: "鬼刀", cost: 5, power: 5 },
-      { id: "atk-6", cost: 6, power: 6 },
-      { id: "atk-7", cost: 7, power: 7 },
-      { id: "atk-8", cost: 8, power: 8 },
-      { id: "atk-9", cost: 9, power: 9 },
-      { id: "atk-10", cost: 10, power: 10 },
+      { id: "atk-1", name: "小刀", cost: 1, power: 1, category: "range-1" },
+      { id: "atk-2", name: "大刀", cost: 2, power: 2, category: "range-1" },
+      { id: "atk-3", name: "冰刀", cost: 3, power: 3, category: "range-1" },
+      { id: "atk-4", name: "火刀", cost: 4, power: 4, category: "range-1" },
+      { id: "atk-5", name: "鬼刀", cost: 5, power: 5, category: "range-1" },
+      { id: "atk-6", cost: 6, power: 6, category: "range-1" },
+      { id: "atk-7", cost: 7, power: 7, category: "range-1" },
+      { id: "atk-8", cost: 8, power: 8, category: "range-1" },
+      { id: "atk-9", cost: 9, power: 9, category: "range-1" },
+      { id: "atk-10", cost: 10, power: 10, category: "range-1" },
+      { id: "atk-long", name: "长刀", cost: 2, power: 1, range: 2, category: "range-2" },
+      { id: "atk-longsword", name: "长剑", cost: 3, power: 2, range: 2, category: "range-2" },
+      { id: "atk-spear", name: "长矛", cost: 6, power: 5, range: 2, category: "range-2" },
+      {
+        id: "atk-firebomb",
+        name: "燃烧弹",
+        cost: 4,
+        power: 1,
+        range: 1,
+        category: "special",
+        tacticalEffect: "firebomb",
+        targetCount: 2,
+        text: "花费 4，对两个连续相邻格各发射一把小刀；下回合生成火焰",
+      },
     ],
   },
   heroes: {
@@ -64,6 +78,44 @@ const BALANCE = {
       healCost: 4,
       healAmount: 1,
     },
+    pharmacist: {
+      maxHp: 3,
+      allowedAttackCosts: [1, 5, 10],
+      loadoutSize: 2,
+      recoveryCountdown: 10,
+      recoveryHealTo: 2,
+      invinciblePotionCost: 3,
+      invinciblePotionTurns: 2,
+      poisonCost: 3,
+      poisonPower: 0.1,
+      poisonDamage: 2,
+      poisonTurns: 2,
+      poisonTickDamage: 1,
+      reviveCost: 8,
+      reviveXp: 1,
+    },
+    ninja: {
+      maxHp: 2,
+      shurikenPower: 3,
+      blindTurns: 2,
+      stealthCost: 2,
+      stealthTurns: 4,
+    },
+    puppet: {
+      maxHp: 2,
+      shieldXpGain: 1,
+      standbyHp: 3,
+      standbyTurns: 3,
+      reviveXp: 1,
+      reviveHp: 1,
+      shieldCooldown: 6,
+      shieldCost: 2,
+    },
+    paladin: {
+      maxHp: 4,
+      xpPerDamageTaken: 1,
+      tauntTurns: 1,
+    },
     assassin: {
       maxHp: 1,
       jiXpGain: 4,
@@ -71,6 +123,22 @@ const BALANCE = {
     vampire: {
       maxHp: 2,
       healPerDamage: 1,
+    },
+    hunter: {
+      maxHp: 2,
+      precisionShotCost: 6,
+      precisionShotPower: 8,
+      precisionShotRange: 2,
+      missRefunds: {
+        "atk-3": 1,
+        "atk-4": 1,
+        "atk-5": 2,
+        "atk-6": 2,
+        "atk-7": 2,
+        "atk-8": 2,
+        "atk-9": 2,
+        "atk-10": 3,
+      },
     },
     vaingloriousWarrior: {
       maxHp: 2,
@@ -119,10 +187,84 @@ const BALANCE = {
   ai: {
     lowEnergyTarget: 2,
     highThreatAttack: 5,
+    heroProfiles: {
+      paladin: {
+        lowEnergyTarget: 1,
+        highThreatAttack: 10,
+      },
+      assassin: {
+        lowEnergyTarget: 1,
+        highThreatAttack: 7,
+      },
+      vampire: {
+        lowEnergyTarget: 1,
+        highThreatAttack: 8,
+      },
+      dancer: {
+        lowEnergyTarget: 1,
+        highThreatAttack: 8,
+      },
+      astrologer: {
+        lowEnergyTarget: 2,
+        highThreatAttack: 5,
+      },
+    },
   },
 };
 
 const ACTIONS = buildActions(BALANCE);
+
+const PHARMACIST_LOADOUT_OPTIONS = [
+  {
+    id: "pharmacist-recovery",
+    name: "恢复",
+    kind: "passive",
+    text: `HP 减至 1 后，若接下来 9 回合未死亡，第 10 回合 HP 加至 ${BALANCE.heroes.pharmacist.recoveryHealTo}`,
+  },
+  {
+    id: "pharmacist-invincible-potion",
+    name: "无敌药剂",
+    kind: "skill",
+    cost: BALANCE.heroes.pharmacist.invinciblePotionCost,
+    text: `花费 ${BALANCE.heroes.pharmacist.invinciblePotionCost}，目标下回合起无敌 ${BALANCE.heroes.pharmacist.invinciblePotionTurns} 回合；本回合药师无敌，目标带小防`,
+  },
+  {
+    id: "pharmacist-poison",
+    name: "下毒",
+    kind: "skill",
+    cost: BALANCE.heroes.pharmacist.poisonCost,
+    text: `花费 ${BALANCE.heroes.pharmacist.poisonCost}，用 Ji刀大小攻击目标；命中造成 ${BALANCE.heroes.pharmacist.poisonDamage} 伤害并施加 ${BALANCE.heroes.pharmacist.poisonTurns} 回合中毒；本回合药师小防`,
+  },
+  {
+    id: "pharmacist-revive",
+    name: "复活药剂",
+    kind: "skill",
+    cost: BALANCE.heroes.pharmacist.reviveCost,
+    text: `花费 ${BALANCE.heroes.pharmacist.reviveCost}，复活死亡目标为经典武者并获得 ${BALANCE.heroes.pharmacist.reviveXp} XP；本回合药师无敌`,
+  },
+];
+const DEFAULT_PHARMACIST_LOADOUT = ["pharmacist-recovery", "pharmacist-invincible-potion"];
+const HERO_LORE = {
+  classic: "旧港的钟声停在午夜以后，仍有人听见武者在雾里练刀。每一次出手，都像在回应海底某个沉睡意志的拍掌声。",
+  priest: "牧师守着一座没有门的礼拜堂。祷文写在盐渍的墙上，所有被治愈的人都梦见过同一只从云层后睁开的眼。",
+  assassin: "刺客从不留下脚印，只留下潮湿的黑羽与忽然熄灭的灯。有人说他的 Ji 不是蓄力，而是在向暗处归还名字。",
+  vampire: "吸血鬼的城堡不在山上，而在镜子的背面。每一道伤口都是邀请，每一次回复都让月光更像血。",
+  vaingloriousWarrior: "虚荣勇士听见深海观众的喝彩才会拔剑。他的荣耀越响，盔甲内侧那些细小的触须就越安静。",
+  werewolf: "狼人记不清第一次变身的夜晚，只记得月亮裂成两半。狂暴时，他不是失去理智，而是终于听懂了远古的吼声。",
+  iceSorcerer: "冰法收集的不是冰，而是星星死亡后的碎屑。碎片满溢时，敌人会短暂看见宇宙尽头冻结的王座。",
+  astrologer: "占星家不预测未来，他只把未来从天上拽下来。那些坠落的鬼刀，来自一颗不该被命名的黑星。",
+  dancer: "舞女的步伐写成螺旋，观者越想逃离，越会跟着节拍走向中央。她微笑时，地板下会响起第二支乐队。",
+  hunter: "猎人追踪的猎物早已死去多年，但足迹每天都会更新。他的箭矢命中后会回到手中，像深林里不肯结束的回声。",
+  ninja: "忍者把影子折成细小的星刃。被他盯上的人会先失去方向，再听见黑暗里传来金属回旋的低响。",
+  puppet: "木偶的线并不通向天花板，而是垂入舞台下方的深井。它倒下时，井底会有另一双手慢慢把线重新系紧。",
+  pharmacist: "药师的药柜里没有标签，只有潮湿的星图。瓶中液体偶尔会自己转向，仿佛深渊里的病人正隔着玻璃呼吸。",
+  paladin: "圣骑士的盾牌来自一艘沉没圣船的舱门。每当敌意落在他身上，门后便传来潮湿的圣歌，催促所有刀锋转向同一个名字。",
+  battery: "聚气师把每一次呼吸都存进铜制罗盘。罗盘指针从不指北，只指向下一次即将被夺走的机会。",
+  balancedBot: "平衡bot来自一间无人承认存在的实验室。它的算法追求公平，直到公平本身开始长出眼睛。",
+  woodendummy: "wood原本只是练功桩，直到某夜潮水漫进武馆。现在每一道木纹都像闭合的嘴，等待有人再拍一下 Ji。",
+  guard: "铁壁站在旧城门前太久，城门已经腐烂，他却仍在防守。盾牌背面刻着一行小字：不要听门后的海声。",
+  breaker: "破阵手相信所有阵法都有裂缝。后来他发现天空也是阵法，而星辰之间的裂缝正缓慢扩大。",
+};
 
 function buildActions(balance) {
   const chargeActions = Object.entries(balance.actions.charge).map(([id, action]) => ({
@@ -153,9 +295,13 @@ function buildActions(balance) {
     name: action.name || `${action.cost}费攻`,
     cost: action.cost,
     power: action.power,
+    range: action.range || 1,
+    category: action.category || (action.range > 1 ? "range-2" : "range-1"),
+    tacticalEffect: action.tacticalEffect || "",
+    targetCount: action.targetCount || 1,
     defense: 0,
     xpGain: 0,
-    text: `花费 ${action.cost}，攻击强度 ${action.power}`,
+    text: action.text || `花费 ${action.cost}，攻击强度 ${action.power}${action.range ? `，距离 ${action.range}` : ""}`,
   }));
 
   return [...chargeActions, ...defenseActions, ...attackActions];
@@ -210,12 +356,127 @@ const HEROES = {
       },
     },
   },
+  pharmacist: {
+    id: "pharmacist",
+    name: "药师 Pharmacist",
+    maxHp: BALANCE.heroes.pharmacist.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: "辅助型药剂师，开局前从四种药剂方案中选择两个。",
+    passives: [
+      { name: "辅助", text: "只能使用 1/5/10 费攻击" },
+      { name: "配药", text: "开局前在恢复、无敌药剂、下毒、复活药剂中选择 2 个" },
+    ],
+    activeSkills: [
+      {
+        id: "pharmacist-invincible-potion",
+        kind: "skill",
+        name: "无敌药剂",
+        cost: BALANCE.heroes.pharmacist.invinciblePotionCost,
+        power: 0,
+        defense: BALANCE.defenseGrades.invincible,
+        xpGain: 0,
+        text: PHARMACIST_LOADOUT_OPTIONS.find((option) => option.id === "pharmacist-invincible-potion").text,
+        effects: {
+          pharmacistInvinciblePotion: true,
+          targetDefense: BALANCE.defenseGrades.small,
+        },
+      },
+      {
+        id: "pharmacist-poison",
+        kind: "skill",
+        name: "下毒",
+        cost: BALANCE.heroes.pharmacist.poisonCost,
+        power: BALANCE.heroes.pharmacist.poisonPower,
+        defense: BALANCE.defenseGrades.small,
+        xpGain: 0,
+        text: PHARMACIST_LOADOUT_OPTIONS.find((option) => option.id === "pharmacist-poison").text,
+        effects: {
+          pharmacistPoison: true,
+          skillAttack: true,
+          skillAttackPower: BALANCE.heroes.pharmacist.poisonPower,
+          damage: BALANCE.heroes.pharmacist.poisonDamage,
+          poisonTurns: BALANCE.heroes.pharmacist.poisonTurns,
+        },
+      },
+      {
+        id: "pharmacist-revive",
+        kind: "skill",
+        name: "复活药剂",
+        cost: BALANCE.heroes.pharmacist.reviveCost,
+        power: 0,
+        defense: BALANCE.defenseGrades.invincible,
+        xpGain: 0,
+        text: PHARMACIST_LOADOUT_OPTIONS.find((option) => option.id === "pharmacist-revive").text,
+        effects: {
+          revive: true,
+          invincible: true,
+        },
+      },
+    ],
+    hooks: {
+      canUseAction(action) {
+        if (action.kind === "attack") return BALANCE.heroes.pharmacist.allowedAttackCosts.includes(action.cost);
+        return true;
+      },
+      afterTakeDamage(self, attacker, context) {
+        if (!hasPharmacistLoadout(self, "pharmacist-recovery")) return;
+        if (self.hp !== 1 || hasStatus(self, "pharmacist-recovery")) return;
+        setStatus(self, {
+          id: "pharmacist-recovery",
+          name: "恢复",
+          text: `${BALANCE.heroes.pharmacist.recoveryCountdown} 回合后恢复`,
+          turns: BALANCE.heroes.pharmacist.recoveryCountdown,
+          fresh: true,
+          effects: {
+            healTo: BALANCE.heroes.pharmacist.recoveryHealTo,
+          },
+        });
+        context.notes.push(`${self.label}触发恢复：若接下来 9 回合未死亡，第 10 回合 HP 恢复至 ${BALANCE.heroes.pharmacist.recoveryHealTo}。`);
+      },
+    },
+  },
+  paladin: {
+    id: "paladin",
+    name: "圣骑士 Paladin",
+    maxHp: BALANCE.heroes.paladin.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: "别名：坦克。承伤后反蓄力，并用仇恨牵制敌方目标。",
+    passives: [
+      { name: "坦护", text: `每受到 1 点伤害，获得 ${BALANCE.heroes.paladin.xpPerDamageTaken} XP` },
+      { name: "仇恨", text: `击中目标后，目标下回合攻击或伤害技能只能选择坦克` },
+    ],
+    activeSkills: [],
+    hooks: {
+      onDealDamage(self, target, context) {
+        if (context.damage <= 0) return;
+        setStatus(target, {
+          id: `paladin-taunt-${self.id || self.label}`,
+          type: "negative",
+          name: "仇恨",
+          text: `只能攻击${self.label}`,
+          turns: BALANCE.heroes.paladin.tauntTurns,
+          fresh: true,
+          effects: {
+            tauntTargetId: self.id || "",
+            tauntTargetLabel: self.label,
+          },
+        });
+        context.notes.push(`${target.label}受到${self.label}的仇恨影响，下回合攻击和伤害技能只能选择${self.label}。`);
+      },
+      afterTakeDamage(self, attacker, context) {
+        if (context.damage <= 0) return;
+        const gained = context.damage * BALANCE.heroes.paladin.xpPerDamageTaken;
+        self.xp += gained;
+        context.notes.push(`${self.label}承伤蓄力，获得 ${gained} XP。`);
+      },
+    },
+  },
   dancer: {
     id: "dancer",
     name: "舞女 Dancer",
     maxHp: BALANCE.heroes.dancer.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `灵巧控场英雄, 被舞女击中的目标下回合强制出 Ji。`,
+    description: `灵巧，轻盈，致命`,
     passives: [
       { name: "迷步", text: `击中目标后，下回合强制目标出 Ji` },
     ],
@@ -274,7 +535,7 @@ const HEROES = {
     name: "刺客 Assassin",
     maxHp: BALANCE.heroes.assassin.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `高爆发脆皮英雄，每次 Ji 获得 ${BALANCE.heroes.assassin.jiXpGain} XP。`,
+    description: `高爆发脆皮英雄，最具代表性的英雄之一`,
     passives: [{ name: "疾蓄", text: `Ji 获得 ${BALANCE.heroes.assassin.jiXpGain} XP` }],
     activeSkills: [],
     hooks: {
@@ -288,7 +549,7 @@ const HEROES = {
     name: "吸血鬼 Vampire",
     maxHp: BALANCE.heroes.vampire.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `肉盾克星，HP=${BALANCE.heroes.vampire.maxHp}，每造成 1 点伤害回复 ${BALANCE.heroes.vampire.healPerDamage} HP。`,
+    description: `肉盾克星，传统吸血角色`,
     passives: [{ name: "吸血", text: `造成伤害后回复 ${BALANCE.heroes.vampire.healPerDamage} HP` }],
     activeSkills: [],
     hooks: {
@@ -300,13 +561,218 @@ const HEROES = {
       },
     },
   },
+  hunter: {
+    id: "hunter",
+    name: "猎人 Hunter",
+    maxHp: BALANCE.heroes.hunter.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: "无限追击！",
+    passives: [
+      { name: "回收", text: "攻击命中返还攻击名义费用；冰刀/火刀未中返 1，鬼刀到9费未中返 2，10费未中返 3" },
+    ],
+    activeSkills: [
+      {
+        id: "hunter-precision-shot",
+        kind: "attack",
+        category: "skill",
+        name: "精准狙击",
+        cost: BALANCE.heroes.hunter.precisionShotCost,
+        power: BALANCE.heroes.hunter.precisionShotPower,
+        range: BALANCE.heroes.hunter.precisionShotRange,
+        defense: 0,
+        xpGain: 0,
+        text: `花费 ${BALANCE.heroes.hunter.precisionShotCost}，攻击强度 ${BALANCE.heroes.hunter.precisionShotPower}，距离 ${BALANCE.heroes.hunter.precisionShotRange}`,
+      },
+    ],
+    hooks: {
+      onDealDamage(self, target, context) {
+        if (context.damage <= 0 || context.action.kind !== "attack") return;
+        const refund = getHunterHitRefund(self, context.action);
+        if (refund <= 0) return;
+        self.xp += refund;
+        context.notes.push(`${self.label}的${context.action.name}命中，返还 ${refund} XP。`);
+      },
+      afterRound(self, opponent, context) {
+        const missedActions = getHunterMissedActions(context);
+        for (const action of missedActions) {
+          const refund = getHunterMissRefund(action);
+          if (refund <= 0) continue;
+          self.xp += refund;
+          context.notes.push(`${self.label}的${action.name}未命中，返还 ${refund} XP。`);
+        }
+      },
+    },
+  },
+  ninja: {
+    id: "ninja",
+    name: "忍者 Ninja",
+    maxHp: BALANCE.heroes.ninja.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: "用手里剑制造致盲，并借隐身拖入自己的节奏。",
+    passives: [{ name: "手里剑", text: "每造成 1 点伤害获得 1 把手里剑；手里剑命中致盲 2 回合，未命中后 2 回合小防" }],
+    activeSkills: [
+      {
+        id: "ninja-shuriken",
+        kind: "attack",
+        category: "skill",
+        name: "手里剑",
+        cost: 0,
+        power: BALANCE.heroes.ninja.shurikenPower,
+        range: 1,
+        defense: 0,
+        xpGain: 0,
+        text: `消耗 1 把手里剑，攻击强度 ${BALANCE.heroes.ninja.shurikenPower}；命中致盲 ${BALANCE.heroes.ninja.blindTurns} 回合并重获手里剑，未命中后 ${BALANCE.heroes.ninja.blindTurns} 回合小防`,
+        effects: {
+          shuriken: true,
+        },
+      },
+      {
+        id: "ninja-stealth",
+        kind: "skill",
+        name: "隐身",
+        cost: BALANCE.heroes.ninja.stealthCost,
+        power: 0,
+        defense: BALANCE.defenseGrades.small,
+        xpGain: 0,
+        text: `花费 ${BALANCE.heroes.ninja.stealthCost}，接下来 ${BALANCE.heroes.ninja.stealthTurns} 回合小防；本回合小防`,
+        effects: {
+          stealth: true,
+        },
+      },
+    ],
+    hooks: {
+      init(self) {
+        self.flags.shuriken = 0;
+      },
+      canUseAction(action, self) {
+        return action.id !== "ninja-shuriken" || (self.flags.shuriken || 0) > 0;
+      },
+      modifyDefense(value, self) {
+        return hasEffectiveStatus(self, "ninja-stealth") || hasEffectiveStatus(self, "ninja-shuriken-guard")
+          ? Math.max(value, BALANCE.defenseGrades.small)
+          : value;
+      },
+      onDealDamage(self, target, context) {
+        if (context.damage <= 0) return;
+        self.flags.shuriken = (self.flags.shuriken || 0) + context.damage;
+        context.notes.push(`${self.label}造成 ${context.damage} 点伤害，获得 ${context.damage} 把手里剑。`);
+        if (!context.action.effects?.shuriken) return;
+        setStatus(target, {
+          id: "ninja-blind",
+          type: "negative",
+          name: "致盲",
+          text: `${BALANCE.heroes.ninja.blindTurns} 回合`,
+          turns: BALANCE.heroes.ninja.blindTurns,
+          fresh: true,
+        });
+        context.notes.push(`${target.label}被手里剑致盲，${BALANCE.heroes.ninja.blindTurns} 回合内只能选择自己。`);
+      },
+      afterRound(self, opponent, context) {
+        if (context.selfAction.id === "ninja-shuriken") {
+          self.flags.shuriken = Math.max(0, (self.flags.shuriken || 0) - 1);
+          if (context.hit) {
+            self.flags.shuriken += 1;
+          } else {
+            setStatus(self, {
+              id: "ninja-shuriken-guard",
+              type: "positive",
+              name: "手里剑架防",
+              text: `${BALANCE.heroes.ninja.blindTurns} 回合小防`,
+              turns: BALANCE.heroes.ninja.blindTurns,
+              fresh: true,
+            });
+            context.notes.push(`${self.label}手里剑未命中，接下来 ${BALANCE.heroes.ninja.blindTurns} 回合获得小防。`);
+          }
+        }
+        if (context.selfAction.effects?.stealth) {
+          setStatus(self, {
+            id: "ninja-stealth",
+            type: "positive",
+            name: "隐身",
+            text: `${BALANCE.heroes.ninja.stealthTurns} 回合小防`,
+            turns: BALANCE.heroes.ninja.stealthTurns,
+            fresh: true,
+          });
+          context.notes.push(`${self.label}进入隐身，接下来 ${BALANCE.heroes.ninja.stealthTurns} 回合获得小防。`);
+        }
+      },
+    },
+  },
+  puppet: {
+    id: "puppet",
+    name: "木偶 Puppet",
+    maxHp: BALANCE.heroes.puppet.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: "有生命值护盾和一次待机复活能力。",
+    passives: [
+      { name: "生命盾", text: "开局自带 1 层生命盾，抵挡 1 点伤害；盾破后 +1 XP" },
+      { name: "待机", text: "限定技：死亡后下回合进入待机，3 回合内储备生命未耗尽则复活" },
+    ],
+    activeSkills: [
+      {
+        id: "puppet-shield",
+        kind: "skill",
+        name: "放盾",
+        cost: BALANCE.heroes.puppet.shieldCost,
+        power: 0,
+        defense: BALANCE.defenseGrades.mid,
+        xpGain: 0,
+        text: `花费 ${BALANCE.heroes.puppet.shieldCost}，盾被击爆后第 ${BALANCE.heroes.puppet.shieldCooldown} 回合及以后可用；最多 1 盾，本回合中防`,
+        effects: {
+          puppetShield: true,
+        },
+      },
+    ],
+    hooks: {
+      init(self) {
+        self.flags.puppetShield = 1;
+        self.flags.puppetShieldBrokenRound = 0;
+        self.flags.puppetStandbyUsed = false;
+        self.flags.puppetStandbyHp = 0;
+      },
+      canUseAction(action, self) {
+        if (action.id !== "puppet-shield") return true;
+        return !self.flags.puppetShield
+          && self.flags.puppetShieldBrokenRound > 0
+          && state.round - self.flags.puppetShieldBrokenRound >= BALANCE.heroes.puppet.shieldCooldown;
+      },
+      beforeTakeDamage(self, attacker, context) {
+        if (self.flags.puppetStandby && context.damage > 0) {
+          self.flags.puppetStandbyHp = Math.max(0, (self.flags.puppetStandbyHp || 0) - context.damage);
+          context.notes.push(`${self.label}待机储备生命 -${context.damage}，剩余 ${self.flags.puppetStandbyHp}。`);
+          return 0;
+        }
+        if (self.flags.puppetShield > 0 && context.damage > 0) {
+          self.flags.puppetShield = 0;
+          self.flags.puppetShieldBrokenRound = state.round;
+          self.xp += BALANCE.heroes.puppet.shieldXpGain;
+          context.damage -= 1;
+          context.notes.push(`${self.label}的生命盾抵挡 1 点伤害并破裂，${self.label} +${BALANCE.heroes.puppet.shieldXpGain} XP。`);
+        }
+        return context.damage;
+      },
+      afterTakeDamage(self, attacker, context) {
+        if (self.hp > 0 || self.flags.puppetStandbyUsed || self.flags.puppetPendingStandby || self.flags.puppetStandby) return;
+        self.flags.puppetStandbyUsed = true;
+        self.flags.puppetPendingStandby = true;
+        context.notes.push(`${self.label}被击杀，限定技触发：下回合进入待机状态。`);
+      },
+      afterRound(self, opponent, context) {
+        if (context.selfAction.effects?.puppetShield && !self.flags.puppetShield) {
+          self.flags.puppetShield = 1;
+          markRoundPositiveEffect(self, "生命盾");
+          context.notes.push(`${self.label}重新放置 1 层生命盾。`);
+        }
+      },
+    },
+  },
   vaingloriousWarrior: {
     id: "vaingloriousWarrior",
     name: "虚荣勇士 Vainglorious Warrior",
     maxHp: BALANCE.heroes.vaingloriousWarrior.maxHp,
     startingXp: BALANCE.heroes.vaingloriousWarrior.startingXp,
-    description: `起手强势英雄，HP=${BALANCE.heroes.vaingloriousWarrior.maxHp}，开局自带 ${BALANCE.heroes.vaingloriousWarrior.startingXp} XP。`,
-    passives: [{ name: "虚荣", text: `开局 +${BALANCE.heroes.vaingloriousWarrior.startingXp} XP` }],
+    description: `起手强势英雄，限制脆皮发育`,
+    passives: [{ name: "虚荣", text: `开局自带${BALANCE.heroes.vaingloriousWarrior.startingXp} XP` }],
     activeSkills: [],
     hooks: {},
   },
@@ -315,8 +781,8 @@ const HEROES = {
     name: "狼人 Werewolf",
     maxHp: BALANCE.heroes.werewolf.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `觉醒型英雄，首次 HP 低于 ${BALANCE.heroes.werewolf.berserkThreshold} 时进入狂暴，获得 ${BALANCE.heroes.werewolf.invincibleRounds} 回合无敌；狂暴后 Ji 获得 ${BALANCE.heroes.werewolf.berserkJiXpGain} XP，造成伤害翻倍。`,
-    passives: [{ name: "觉醒技", text: `低血狂暴，${BALANCE.heroes.werewolf.invincibleRounds} 回合无敌，Ji +${BALANCE.heroes.werewolf.berserkJiXpGain}，伤害 x${BALANCE.heroes.werewolf.berserkDamageMultiplier}` }],
+    description: `也许下一秒就会狂暴...`,
+    passives: [{ name: "觉醒技", text: `一旦血量小于2，进入狂暴模式，接下来${BALANCE.heroes.werewolf.invincibleRounds} 回合无敌，1 Ji = ${BALANCE.heroes.werewolf.berserkJiXpGain}XP，伤害 x${BALANCE.heroes.werewolf.berserkDamageMultiplier}` }],
     activeSkills: [],
     hooks: {
       modifyDefense(value, self) {
@@ -349,7 +815,7 @@ const HEROES = {
     name: "冰法 Ice Sorcerer",
     maxHp: BALANCE.heroes.iceSorcerer.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `积攒寒冰碎片，满 ${BALANCE.heroes.iceSorcerer.critThreshold} 个后命中攻击会暴击并回复 ${BALANCE.heroes.iceSorcerer.critHeal} HP。3费攻只花 ${BALANCE.heroes.iceSorcerer.discountedAttackCost} XP，且别人用3费攻打冰法时只有1费攻效果。第一回合不能使用 Ji刀。`,
+    description: `寒冰法师，冷不丁释放暴击 `,
     passives: [
       { name: "寒冰碎片", text: `开局 ${BALANCE.heroes.iceSorcerer.startingShards} 个，满 ${BALANCE.heroes.iceSorcerer.critThreshold} 暴击回血` },
       { name: "冰甲", text: `冰刀花费 ${BALANCE.heroes.iceSorcerer.discountedAttackCost}，来袭冰刀强度视为 ${BALANCE.heroes.iceSorcerer.incomingAttackPower}` },
@@ -358,9 +824,11 @@ const HEROES = {
       {
         id: "ice-dagger",
         kind: "attack",
+        category: "skill",
         name: "Ji刀",
         cost: 0,
         power: BALANCE.heroes.iceSorcerer.daggerPower,
+        range: 1,
         defense: 0,
         xpGain: 0,
         text: `花费 0，攻击强度 ${BALANCE.heroes.iceSorcerer.daggerPower}，命中 +${BALANCE.heroes.iceSorcerer.daggerHitShards}🧊，未命中 +${BALANCE.heroes.iceSorcerer.daggerMissShards}🧊`,
@@ -437,9 +905,10 @@ const HEROES = {
         name: "预判",
         cost: BALANCE.heroes.astrologer.predictionCost,
         power: 0,
+        range: 2,
         defense: BALANCE.defenseGrades.small,
         xpGain: 0,
-        text: `花费 ${BALANCE.heroes.astrologer.predictionCost}，本回合小防；下回合落下一把鬼刀并继续小防`,
+        text: `花费 ${BALANCE.heroes.astrologer.predictionCost}，选择距离 2 内目标；本回合小防，下回合鬼刀追踪目标并继续小防`,
         effects: {
           prediction: true,
         },
@@ -472,32 +941,21 @@ const HEROES = {
         context.notes.push(`${self.label}的鬼刀吸血，回复 ${healed} HP，当前 ${formatHearts(self.hp)}。`);
       },
       afterRound(self, opponent, context) {
-        if (!context.selfAction.effects?.prediction) return;
+        if (!context.selfAction.effects?.prediction || context.selfAction.tacticalMiss) return;
+        const target = context.selfAction.tacticalTarget || opponent;
         setStatus(self, {
           id: "astrologer-prediction",
           name: "预判",
-          text: "下回合鬼刀，小防",
+          text: `追踪${target.label}，下回合鬼刀，小防`,
           turns: 1,
           fresh: true,
+          effects: { trackedTarget: target },
         });
-        context.notes.push(`${self.label}完成预判：下回合鬼刀从天而降，并获得小防。`);
+        context.notes.push(`${self.label}完成预判：下回合鬼刀将追踪${target.label}，并获得小防。`);
       },
     },
   },
-    woodendummy:{
-    id: "woodendummy",
-    name: "wood",
-    maxHp: 20,
-    startingXp: 0,
-    description: "无额外机制，完全按童年规则结算。",
-    passives: [],
-    activeSkills: [],
-    hooks: {
-      modifyXpGain(value, self, action) {
-        return action.id === "ji" ? BALANCE.heroes.woodendummy.jiXpGain : value;
-      },
-    },
-  },
+
   classic: {
     id: "classic",
     name: "经典武者",
@@ -508,7 +966,20 @@ const HEROES = {
     activeSkills: [],
     hooks: {},
   },
-
+  balancedBot: {
+    id: "balancedBot",
+    name: "平衡bot",
+    maxHp: BALANCE.heroes.balancedBot.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: `稳定型英雄，每次 Ji 获得 ${BALANCE.heroes.balancedBot.jiXpGain} XP。`,
+    passives: [{ name: "均衡", text: `Ji 获得 ${BALANCE.heroes.balancedBot.jiXpGain} XP` }],
+    activeSkills: [],
+    hooks: {
+      modifyXpGain(value, self, action) {
+        return action.id === "ji" ? BALANCE.heroes.balancedBot.jiXpGain : value;
+      },
+    },
+  },
   battery: {
     id: "battery",
     name: "聚气师",
@@ -539,17 +1010,18 @@ const HEROES = {
       },
     },
   },
-  balancedBot: {
-    id: "balancedBot",
-    name: "平衡bot",
-    maxHp: BALANCE.heroes.balancedBot.maxHp,
-    startingXp: BALANCE.startingXp,
-    description: `稳定型英雄，每次 Ji 获得 ${BALANCE.heroes.balancedBot.jiXpGain} XP。`,
-    passives: [{ name: "均衡", text: `Ji 获得 ${BALANCE.heroes.balancedBot.jiXpGain} XP` }],
+
+      woodendummy:{
+    id: "woodendummy",
+    name: "wood",
+    maxHp: 20,
+    startingXp: 0,
+    description: "不会还手的木桩子，用于测试",
+    passives: [],
     activeSkills: [],
     hooks: {
       modifyXpGain(value, self, action) {
-        return action.id === "ji" ? BALANCE.heroes.balancedBot.jiXpGain : value;
+        return action.id === "ji" ? BALANCE.heroes.woodendummy.jiXpGain : value;
       },
     },
   },
@@ -589,18 +1061,30 @@ const HERO_AVATARS = {
   classic: "./pic/pixel-4.png",
   assassin: "./pic/assassin.png",
   astrologer: "./pic/astrologer.png",
+  guard: "./pic/guard.png",
+  hunter: "./pic/hunter.png",
   iceSorcerer: "./pic/icesorcerer.png",
+  ninja: "./pic/ninja.png",
+  pharmacist: "./pic/pharmacist.png",
   priest: "./pic/priest.png",
   vaingloriousWarrior: "./pic/vaingloriouswarrior.png",
   vampire: "./pic/vampire.png",
   werewolf: "./pic/werewolf1.png",
   werewolfBerserk: "./pic/werewolf2.png",
-  dancer:"./pic/dancer.png"
+  dancer:"./pic/dancer.png",
+  hunter:"./pic/hunter.png",
+  woodendummy:"./pic/wood.png",
+  paladin:"./pic/paladin.png",
+  balancedBot:"./pic/bot1.png",
+  ninja:"./pic/ninja.png",
+  puppet:"./pic/puppet.png"
 };
 
 const STORAGE_KEYS = {
   playerName: "clapDuel.playerName",
   matchHistory: "clapDuel.matchHistory.v1",
+  heroSelection: "clapDuel.heroSelection.v1",
+  pharmacistLoadout: "clapDuel.pharmacistLoadout.v1",
 };
 const DEFAULT_PLAYER_NAME = "玩家";
 const MAX_HISTORY_RECORDS = 200;
@@ -610,6 +1094,9 @@ const SKILL_ANIMATION_TYPES = {
   "ice-dagger": "ice",
   "astrologer-predict": "star",
   "astrologer-drain": "drain",
+  "ninja-shuriken": "attack",
+  "ninja-stealth": "shield-skill",
+  "puppet-shield": "shield-skill",
 };
 
 const state = {
@@ -620,6 +1107,8 @@ const state = {
   enemy: null,
   mode: "cpu",
   pendingEndChoice: null,
+  heroPickerTarget: "",
+  pharmacistLoadoutCollapsed: false,
   melee: {
     fighters: [],
     openTargetId: "",
@@ -690,6 +1179,9 @@ const ui = {
   roomCodeInput: document.querySelector("#roomCodeInput"),
   joinRoomBtn: document.querySelector("#joinRoomBtn"),
   roomStatus: document.querySelector("#roomStatus"),
+  pharmacistLoadoutPanel: document.querySelector("#pharmacistLoadoutPanel"),
+  pharmacistLoadoutCollapse: document.querySelector("#pharmacistLoadoutCollapse"),
+  pharmacistLoadoutOptions: document.querySelector("#pharmacistLoadoutOptions"),
   meleeModeBtn: document.querySelector("#meleeModeBtn"),
   meleePanel: document.querySelector("#meleePanel"),
   meleeGrid: document.querySelector("#meleeGrid"),
@@ -712,6 +1204,11 @@ const ui = {
   heroDetailTitle: document.querySelector("#heroDetailTitle"),
   heroDetailMeta: document.querySelector("#heroDetailMeta"),
   heroDetailBody: document.querySelector("#heroDetailBody"),
+  heroPicker: document.querySelector("#heroPicker"),
+  heroPickerClose: document.querySelector("#heroPickerClose"),
+  heroPickerTitle: document.querySelector("#heroPickerTitle"),
+  heroPickerMeta: document.querySelector("#heroPickerMeta"),
+  heroPickerGrid: document.querySelector("#heroPickerGrid"),
   manualDetail: document.querySelector("#manualDetail"),
   manualClose: document.querySelector("#manualClose"),
   historyDetail: document.querySelector("#historyDetail"),
@@ -722,7 +1219,7 @@ const ui = {
   clearHistoryBtn: document.querySelector("#clearHistoryBtn"),
 };
 
-function makeFighter(label, heroId) {
+function makeFighter(label, heroId, options = {}) {
   const hero = HEROES[heroId];
   const startingHp = hero.maxHp;
   const fighter = {
@@ -736,6 +1233,9 @@ function makeFighter(label, heroId) {
     flags: {},
     statuses: [],
   };
+  if (heroId === "pharmacist") {
+    fighter.flags.pharmacistLoadout = normalizePharmacistLoadout(options.pharmacistLoadout);
+  }
   runHook(fighter, "init", fighter);
   return fighter;
 }
@@ -785,7 +1285,7 @@ function resetGame() {
     pollTimer: null,
   };
   const playerName = getCurrentPlayerName();
-  state.player = makeFighter(playerName, ui.playerHero.value);
+  state.player = makeFighter(playerName, ui.playerHero.value, { pharmacistLoadout: getPlayerPharmacistLoadout() });
   state.enemy = makeFighter("电脑", ui.enemyHero.value);
   state.melee.fighters = [];
   state.melee.openTargetId = "";
@@ -812,9 +1312,10 @@ function populateHeroes() {
     ui.enemyHero.add(enemyOption);
     ui.enemyBHero.add(enemyBOption);
   }
-  ui.playerHero.value = "classic";
-  ui.enemyHero.value = "guard";
-  ui.enemyBHero.value = "classic";
+  const saved = readHeroSelection();
+  setHeroSelectValue(ui.playerHero, saved.playerHero, "classic");
+  setHeroSelectValue(ui.enemyHero, saved.enemyHero, "guard");
+  setHeroSelectValue(ui.enemyBHero, saved.enemyBHero, "classic");
 }
 
 function renderActions() {
@@ -850,6 +1351,7 @@ function render() {
   renderSkillActions(player);
   renderPassivePanel(player, ui.playerPassivePanel, ui.playerPassives);
   renderPassivePanel(enemy, ui.enemyPassivePanel, ui.enemyPassives);
+  renderPharmacistLoadoutPanel();
 
   ui.playerHp.textContent = formatHearts(player.hp);
   ui.enemyHp.textContent = formatHearts(enemy.hp);
@@ -862,6 +1364,8 @@ function render() {
   ui.enemyXpBar.style.width = `${percentage(Math.min(enemy.xp, BALANCE.xpMeterMax), BALANCE.xpMeterMax)}%`;
   ui.playerHero.disabled = state.mode === "online";
   ui.enemyHero.disabled = state.mode === "online";
+  ui.playerCard.classList.toggle("is-selectable", state.mode !== "online");
+  ui.enemyCard.classList.toggle("is-selectable", state.mode !== "online");
   ui.cpuModeBtn.classList.toggle("active", state.mode === "cpu");
   ui.meleeModeBtn.classList.toggle("active", state.mode === "melee");
   ui.createRoomBtn.classList.toggle("active", state.mode === "online" && state.online.slot === "p1");
@@ -873,7 +1377,7 @@ function render() {
       group.hidden = state.mode === "melee" || !state.pendingEndChoice;
       return;
     }
-    group.hidden = state.mode === "melee" || (group.id === "skillGroup" && (player.hero.activeSkills || []).length === 0);
+    group.hidden = state.mode === "melee" || (group.id === "skillGroup" && getHeroActions(player).length === 0);
   });
   renderEndPhaseChoice();
 
@@ -904,7 +1408,7 @@ function renderEndPhaseChoice() {
 }
 
 function renderSkillActions(fighter) {
-  const skills = fighter.hero.activeSkills || [];
+  const skills = getHeroActions(fighter);
   ui.skillActions.innerHTML = "";
   ui.skillGroup.hidden = skills.length === 0;
 
@@ -919,6 +1423,41 @@ function renderSkillActions(fighter) {
   }
 }
 
+function renderPharmacistLoadoutPanel() {
+  const show = ui.playerHero.value === "pharmacist" && state.mode !== "online" && !state.pharmacistLoadoutCollapsed;
+  ui.pharmacistLoadoutPanel.hidden = !show;
+  if (!show) return;
+
+  const selected = getPlayerPharmacistLoadout();
+  ui.pharmacistLoadoutOptions.innerHTML = "";
+  for (const option of PHARMACIST_LOADOUT_OPTIONS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "loadout-card";
+    button.classList.toggle("is-selected", selected.includes(option.id));
+    button.innerHTML = `<strong>${option.name}</strong><span>${option.text}</span>`;
+    button.addEventListener("click", () => togglePlayerPharmacistLoadout(option.id));
+    ui.pharmacistLoadoutOptions.append(button);
+  }
+}
+
+function togglePlayerPharmacistLoadout(optionId) {
+  const selected = getPlayerPharmacistLoadout();
+  const index = selected.indexOf(optionId);
+  if (index >= 0) {
+    if (selected.length <= BALANCE.heroes.pharmacist.loadoutSize) return;
+    selected.splice(index, 1);
+  } else {
+    selected.push(optionId);
+    while (selected.length > BALANCE.heroes.pharmacist.loadoutSize) {
+      selected.shift();
+    }
+  }
+  savePlayerPharmacistLoadout(selected);
+  state.pharmacistLoadoutCollapsed = true;
+  restartAfterHeroSelection();
+}
+
 function renderPassivePanel(fighter, panel, list) {
   const entries = getFighterStatusEntries(fighter);
   list.innerHTML = "";
@@ -930,6 +1469,15 @@ function renderPassivePanel(fighter, panel, list) {
     tag.textContent = formatStatusTag(entry, fighter);
     tag.title = entry.text ? `${entry.name}：${entry.text}` : entry.name;
     list.append(tag);
+    if (entry.id === "pharmacist-loadout" && fighter === state.player && state.mode !== "online") {
+      tag.classList.add("is-interactive");
+      tag.title = `${tag.title}。点击修改配药`;
+      tag.addEventListener("click", (event) => {
+        event.stopPropagation();
+        state.pharmacistLoadoutCollapsed = false;
+        render();
+      });
+    }
   }
 }
 
@@ -965,7 +1513,8 @@ function getHeroRuleEntries(hero) {
 
 function renderHeroAvatar(container, fighterOrHero) {
   const hero = fighterOrHero.hero || fighterOrHero;
-  const isOut = fighterOrHero.hp <= 0;
+  const isFighter = Boolean(fighterOrHero.hero);
+  const isOut = isFighter && isFighterDefeated(fighterOrHero);
   container.innerHTML = "";
   container.title = `查看${getHeroDisplayName(hero)}技能`;
   container.classList.toggle("is-out", isOut);
@@ -974,6 +1523,7 @@ function renderHeroAvatar(container, fighterOrHero) {
     const fallback = document.createElement("span");
     fallback.textContent = "❓";
     container.append(fallback);
+    if (isFighter) appendAvatarEffectBadges(container, fighterOrHero);
     if (isOut) appendOutOverlay(container);
     return;
   }
@@ -986,9 +1536,11 @@ function renderHeroAvatar(container, fighterOrHero) {
     const fallback = document.createElement("span");
     fallback.textContent = "❓";
     container.append(fallback);
+    if (isFighter) appendAvatarEffectBadges(container, fighterOrHero);
     if (isOut) appendOutOverlay(container);
   };
   container.append(image);
+  if (isFighter) appendAvatarEffectBadges(container, fighterOrHero);
   if (isOut) appendOutOverlay(container);
 }
 
@@ -1007,11 +1559,47 @@ function appendOutOverlay(container) {
   container.append(overlay);
 }
 
+function appendAvatarEffectBadges(container, fighter) {
+  const badges = getAvatarEffectBadges(fighter);
+  if (!badges.length) return;
+  const rail = document.createElement("span");
+  rail.className = "avatar-effect-badges";
+  for (const badge of badges) {
+    const item = document.createElement("span");
+    item.className = `avatar-effect-badge ${badge.type}`;
+    item.textContent = badge.label;
+    item.title = badge.title;
+    rail.append(item);
+  }
+  container.append(rail);
+}
+
+function getAvatarEffectBadges(fighter) {
+  if (!fighter?.flags) return [];
+  const positive = new Set(fighter.flags.roundPositiveEffects || []);
+  const negative = new Set();
+  for (const status of fighter.statuses || []) {
+    if (status.type === "positive" || status.id === "pharmacist-invincible") positive.add(status.name);
+    if (status.type === "negative") negative.add(status.name);
+  }
+  const badges = [];
+  if (positive.size) {
+    badges.push({ type: "positive", label: "益", title: `正面效果：${Array.from(positive).join(" / ")}` });
+  }
+  if (negative.size) {
+    badges.push({ type: "negative", label: "损", title: `负面效果：${Array.from(negative).join(" / ")}` });
+  }
+  return badges;
+}
+
 function formatStatusTag(entry, fighter = null) {
   if (!entry.text) return entry.name;
   if ((fighter?.hero?.passives || []).includes(entry)) return entry.name;
   if (entry.name === "寒冰碎片" && entry.text.includes("🧊")) return entry.text.replace(/\s+/g, "");
   if (entry.name === "寒冰碎片") return "碎片机制";
+  if (entry.name === "手里剑") return `手里剑 ${entry.text}`;
+  if (entry.name === "生命盾") return `盾：${entry.text}`;
+  if (entry.name === "待机储备") return `${entry.name} ${entry.text}`;
   if (entry.name === "Ji 连击" || entry.name === "Ji刀连出") return `${entry.name} ${entry.text}`;
   if (entry.text.includes("回合")) return `${entry.name} ${entry.text}`;
   return entry.name;
@@ -1024,21 +1612,141 @@ function openHeroDetail(fighter) {
   ui.heroDetailBody.innerHTML = "";
   renderHeroAvatar(ui.heroDetailAvatar, hero);
 
-  const summary = document.createElement("div");
-  summary.className = "hero-summary";
-  renderHeroSummary(summary, hero);
-  ui.heroDetailBody.append(summary);
+  appendHeroLoreSection(hero);
 
-  appendDetailSection("被动", hero.passives || [], "无被动");
-  appendDetailSection("主动技能", hero.activeSkills || [], "无主动技能");
+  appendDetailSection("被动", getHeroDetailPassiveEntries(fighter), "无被动");
+  appendDetailSection("主动技能", getHeroDetailSkillEntries(fighter), "无主动技能");
 
   const liveEntries = getFighterStatusEntries(fighter).filter((entry) => !(hero.passives || []).includes(entry));
   if (liveEntries.length) appendDetailSection("当前状态", liveEntries, "");
   ui.heroDetail.hidden = false;
 }
 
+function appendHeroLoreSection(hero) {
+  const section = document.createElement("section");
+  section.className = "detail-section detail-lore";
+  const heading = document.createElement("h3");
+  heading.textContent = "背景故事";
+  const text = document.createElement("p");
+  text.textContent = getHeroLore(hero);
+  section.append(heading, text);
+  ui.heroDetailBody.append(section);
+}
+
+function getHeroLore(hero) {
+  return HERO_LORE[hero.id] || `${getHeroDisplayName(hero)}的来历暂未写入档案。只知道每当夜色贴近牌桌，都会有某种低语提醒他再次出手。`;
+}
+
+function getHeroDetailPassiveEntries(fighter) {
+  const entries = [...(fighter.hero.passives || [])];
+  if (fighter.heroId === "pharmacist") {
+    entries.push(...getPharmacistSelectedLoadoutOptions(fighter).filter((option) => option.kind === "passive"));
+  }
+  return entries;
+}
+
+function getHeroDetailSkillEntries(fighter) {
+  if (fighter.heroId === "pharmacist") {
+    return getPharmacistSelectedLoadoutOptions(fighter).filter((option) => option.kind === "skill");
+  }
+  return fighter.hero.activeSkills || [];
+}
+
+function getPharmacistSelectedLoadoutOptions(fighter) {
+  const loadout = fighter.flags.pharmacistLoadout || DEFAULT_PHARMACIST_LOADOUT;
+  return loadout
+    .map((id) => PHARMACIST_LOADOUT_OPTIONS.find((option) => option.id === id))
+    .filter(Boolean);
+}
+
 function closeHeroDetail() {
   ui.heroDetail.hidden = true;
+}
+
+function openHeroPicker(target) {
+  if (state.mode === "online") {
+    addLog("在线房间中不能临时切换英雄。");
+    return;
+  }
+  state.heroPickerTarget = target;
+  renderHeroPicker();
+  ui.heroPicker.hidden = false;
+}
+
+function closeHeroPicker() {
+  ui.heroPicker.hidden = true;
+  state.heroPickerTarget = "";
+}
+
+function renderHeroPicker() {
+  const target = state.heroPickerTarget || "player";
+  const select = getHeroSelectForTarget(target);
+  const titleMap = {
+    player: "选择你的英雄",
+    enemy: "选择电脑A英雄",
+    enemyB: "选择电脑B英雄",
+  };
+  ui.heroPickerTitle.textContent = titleMap[target] || "选择英雄";
+  ui.heroPickerMeta.textContent = "点击英雄头像或名称即可切换。";
+  ui.heroPickerGrid.innerHTML = "";
+
+  for (const hero of Object.values(HEROES)) {
+    const card = document.createElement("button");
+    card.className = "hero-pick-card";
+    card.type = "button";
+    card.classList.toggle("is-selected", select?.value === hero.id);
+
+    const avatar = document.createElement("div");
+    avatar.className = "hero-avatar";
+    renderHeroAvatar(avatar, hero);
+    avatar.removeAttribute("title");
+
+    const name = document.createElement("div");
+    name.className = "hero-pick-name";
+    name.textContent = getHeroDisplayName(hero);
+
+    card.append(avatar, name, renderHeroPickTooltip(hero));
+    card.addEventListener("click", () => applyHeroPickerSelection(hero.id));
+    ui.heroPickerGrid.append(card);
+  }
+}
+
+function renderHeroPickTooltip(hero) {
+  const tooltip = document.createElement("div");
+  tooltip.className = "hero-pick-tooltip";
+  for (const entry of getHeroRuleEntries(hero)) {
+    const name = document.createElement("strong");
+    name.textContent = entry.name;
+    const text = document.createElement("span");
+    text.textContent = entry.text || "无额外说明";
+    tooltip.append(name, text);
+  }
+  return tooltip;
+}
+
+function getHeroSelectForTarget(target) {
+  if (target === "enemy") return ui.enemyHero;
+  if (target === "enemyB") return ui.enemyBHero;
+  return ui.playerHero;
+}
+
+function applyHeroPickerSelection(heroId) {
+  const target = state.heroPickerTarget;
+  const select = getHeroSelectForTarget(target);
+  if (!select || !HEROES[heroId]) return;
+  select.value = heroId;
+  if (target === "player") state.pharmacistLoadoutCollapsed = false;
+  saveHeroSelection();
+  closeHeroPicker();
+  restartAfterHeroSelection();
+}
+
+function restartAfterHeroSelection() {
+  if (state.mode === "melee") {
+    startMeleeGame();
+    return;
+  }
+  if (state.mode === "cpu") resetGame();
 }
 
 function openManualDetail() {
@@ -1142,7 +1850,7 @@ function buildMatchRecord() {
   if (state.mode === "melee") {
     const player = getMeleePlayer();
     if (!player) return null;
-    const alive = state.melee.fighters.filter((fighter) => fighter.hp > 0);
+    const alive = state.melee.fighters.filter((fighter) => !isFighterDefeated(fighter));
     const winner = alive.length === 1 ? alive[0] : null;
     return {
       ...base,
@@ -1152,7 +1860,7 @@ function buildMatchRecord() {
       opponentHeroes: state.melee.fighters
         .filter((fighter) => fighter.id !== player.id)
         .map((fighter) => `${fighter.label}：${getHeroDisplayName(fighter.hero)}`),
-      result: player.hp <= 0 ? "loss" : winner === player ? "win" : "draw",
+      result: isFighterDefeated(player) ? "loss" : winner === player ? "win" : "draw",
     };
   }
 
@@ -1167,9 +1875,9 @@ function buildMatchRecord() {
 }
 
 function getDuelResult() {
-  if (state.player.hp <= 0 && state.enemy.hp <= 0) return "draw";
-  if (state.enemy.hp <= 0) return "win";
-  if (state.player.hp <= 0) return "loss";
+  if (isFighterDefeated(state.player) && isFighterDefeated(state.enemy)) return "draw";
+  if (isFighterDefeated(state.enemy)) return "win";
+  if (isFighterDefeated(state.player)) return "loss";
   return "draw";
 }
 
@@ -1185,6 +1893,55 @@ function readMatchHistory() {
 
 function writeMatchHistory(records) {
   writeStorage(STORAGE_KEYS.matchHistory, JSON.stringify(records));
+}
+
+function readHeroSelection() {
+  try {
+    const raw = readStorage(STORAGE_KEYS.heroSelection);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveHeroSelection() {
+  writeStorage(STORAGE_KEYS.heroSelection, JSON.stringify({
+    playerHero: ui.playerHero.value,
+    enemyHero: ui.enemyHero.value,
+    enemyBHero: ui.enemyBHero.value,
+  }));
+}
+
+function setHeroSelectValue(select, heroId, fallback) {
+  select.value = HEROES[heroId] ? heroId : fallback;
+}
+
+function normalizePharmacistLoadout(value) {
+  const validIds = PHARMACIST_LOADOUT_OPTIONS.map((option) => option.id);
+  const source = Array.isArray(value) ? value : DEFAULT_PHARMACIST_LOADOUT;
+  const unique = [];
+  for (const id of source) {
+    if (validIds.includes(id) && !unique.includes(id)) unique.push(id);
+  }
+  for (const id of DEFAULT_PHARMACIST_LOADOUT) {
+    if (unique.length >= BALANCE.heroes.pharmacist.loadoutSize) break;
+    if (!unique.includes(id)) unique.push(id);
+  }
+  return unique.slice(0, BALANCE.heroes.pharmacist.loadoutSize);
+}
+
+function getPlayerPharmacistLoadout() {
+  try {
+    const raw = readStorage(STORAGE_KEYS.pharmacistLoadout);
+    return normalizePharmacistLoadout(raw ? JSON.parse(raw) : DEFAULT_PHARMACIST_LOADOUT);
+  } catch (error) {
+    return normalizePharmacistLoadout(DEFAULT_PHARMACIST_LOADOUT);
+  }
+}
+
+function savePlayerPharmacistLoadout(loadout) {
+  writeStorage(STORAGE_KEYS.pharmacistLoadout, JSON.stringify(normalizePharmacistLoadout(loadout)));
 }
 
 function clearCurrentPlayerHistory() {
@@ -1274,10 +2031,41 @@ function getFighterStatusEntries(fighter) {
   if (fighter.flags.iceDaggerStreak > 0) {
     entries.push({ name: "Ji刀连出", text: `${fighter.flags.iceDaggerStreak}/${BALANCE.heroes.iceSorcerer.daggerStreakLimit}` });
   }
+  if (fighter.flags.shuriken !== undefined) {
+    entries.push({ name: "手里剑", text: `x${fighter.flags.shuriken}` });
+  }
+  if (fighter.heroId === "puppet") {
+    entries.push({ name: "生命盾", text: fighter.flags.puppetShield > 0 ? "可抵挡 1 伤害" : "已破裂" });
+    if (fighter.flags.puppetStandby) {
+      entries.push({ name: "待机储备", text: `${fighter.flags.puppetStandbyHp}/${BALANCE.heroes.puppet.standbyHp}，${fighter.flags.puppetStandbyTurns} 回合` });
+    }
+  }
+  if (fighter.heroId === "pharmacist") {
+    const names = (fighter.flags.pharmacistLoadout || DEFAULT_PHARMACIST_LOADOUT)
+      .map((id) => PHARMACIST_LOADOUT_OPTIONS.find((option) => option.id === id)?.name)
+      .filter(Boolean)
+      .join(" / ");
+    entries.push({ id: "pharmacist-loadout", name: "配药", text: names });
+  }
   for (const status of fighter.statuses) {
     entries.push({ name: status.name, text: status.text || "" });
   }
   return entries;
+}
+
+function getHunterHitRefund(fighter, action) {
+  if (action.kind !== "attack") return 0;
+  return action.cost || 0;
+}
+
+function getHunterMissRefund(action) {
+  return BALANCE.heroes.hunter.missRefunds[action.id] || 0;
+}
+
+function getHunterMissedActions(context) {
+  if (Array.isArray(context.missedActions)) return context.missedActions;
+  const action = context.selfAction;
+  return action?.kind === "attack" && !context.hit ? [action] : [];
 }
 
 function percentage(value, max) {
@@ -1334,11 +2122,11 @@ function startMeleeGame() {
   state.matchRecorded = false;
   state.pendingEndChoice = null;
   const playerName = getCurrentPlayerName();
-  state.player = makeFighter(playerName, ui.playerHero.value);
+  state.player = makeFighter(playerName, ui.playerHero.value, { pharmacistLoadout: getPlayerPharmacistLoadout() });
   state.enemy = makeFighter("电脑A", ui.enemyHero.value);
   clearMeleeTargeting(true);
   state.melee.fighters = [
-    makeMeleeFighter("p1", playerName, ui.playerHero.value, true),
+    makeMeleeFighter("p1", playerName, ui.playerHero.value, true, { pharmacistLoadout: getPlayerPharmacistLoadout() }),
     makeMeleeFighter("ai-a", "电脑A", ui.enemyHero.value, false),
     makeMeleeFighter("ai-b", "电脑B", ui.enemyBHero.value, false),
   ];
@@ -1349,8 +2137,8 @@ function startMeleeGame() {
   render();
 }
 
-function makeMeleeFighter(id, label, heroId, controlled) {
-  const fighter = makeFighter(label, heroId);
+function makeMeleeFighter(id, label, heroId, controlled, options = {}) {
+  const fighter = makeFighter(label, heroId, options);
   fighter.id = id;
   fighter.controlled = controlled;
   fighter.lastSummary = "等待出手";
@@ -1382,7 +2170,8 @@ function createMeleeFighterCard(fighter) {
   const card = document.createElement("article");
   const isPlayer = fighter.controlled;
   const isOpenTarget = state.melee.openTargetId === fighter.id;
-  card.className = `melee-fighter${fighter.hp <= 0 ? " is-out" : ""}${isPlayer ? " is-player" : " is-targetable"}${isOpenTarget ? " is-open" : ""}`;
+  const canOpenDeadTarget = !isPlayer && fighter.hp <= 0 && canMeleePlayerReviveTarget(fighter);
+  card.className = `melee-fighter${isFighterDefeated(fighter) ? " is-out" : ""}${isPlayer ? " is-player" : " is-targetable"}${isOpenTarget ? " is-open" : ""}`;
   card.dataset.fighterId = fighter.id;
 
   const head = document.createElement("div");
@@ -1413,7 +2202,7 @@ function createMeleeFighterCard(fighter) {
   }
   card.append(head);
 
-  if (!isPlayer && isOpenTarget && fighter.hp > 0) {
+  if (!isPlayer && isOpenTarget && (isFighterTargetable(fighter) || canOpenDeadTarget)) {
     card.addEventListener("click", (event) => {
       if (event.target.closest?.(".melee-target-menu, .hero-avatar")) return;
       toggleMeleeTargetMenu(fighter.id);
@@ -1438,7 +2227,7 @@ function createMeleeFighterCard(fighter) {
 
   if (isPlayer) {
     renderMeleePlayerActions(card, fighter);
-  } else if (fighter.hp > 0) {
+  } else if (fighter.hp > 0 || canOpenDeadTarget) {
     card.addEventListener("click", (event) => {
       if (event.target.closest?.(".melee-target-menu, .hero-avatar")) return;
       toggleMeleeTargetMenu(fighter.id);
@@ -1548,7 +2337,7 @@ function createMeleeTargetActionButton(action, target, kind) {
   const incompatible = state.melee.selectionKind && state.melee.selectionKind !== kind;
   const totalIfSelected = getMeleeSelectionCost(target.id) + (selected ? 0 : getCost(player, action));
   button.innerHTML = `<strong>${action.name}</strong><span>${describeAction(action, player)}</span>`;
-  button.disabled = state.over || player.hp <= 0 || target.hp <= 0 || incompatible || totalIfSelected > player.xp || !canUseAction(player, action);
+  button.disabled = state.over || player.hp <= 0 || !canActionTargetFighter(action, target) || incompatible || totalIfSelected > player.xp || !canUseAction(player, action);
   button.classList.toggle("selected", selected);
   button.addEventListener("click", () => toggleMeleeTargetAction(target.id, action.id, kind));
   return button;
@@ -1562,6 +2351,45 @@ function getMeleeSkillChoices(player) {
   return getHeroActions(player).filter((action) => canUseAction(player, action));
 }
 
+function canMeleePlayerReviveTarget(target) {
+  const player = getMeleePlayer();
+  return Boolean(player && target?.hp <= 0 && getHeroActions(player).some((action) => action.effects?.revive && canUseAction(player, action)));
+}
+
+function canActionTargetFighter(action, target, actor = getMeleePlayer()) {
+  if (action.effects?.revive) return target.hp <= 0;
+  return isFighterTargetable(target) && isTargetAllowedByTaunt(actor, action, target) && isTargetAllowedByBlind(actor, action, target);
+}
+
+function isTargetAllowedByTaunt(actor, action, target) {
+  if (!actor || !target || !isDamageTargetAction(action)) return true;
+  const tauntTargetIds = getActiveTauntTargetIds(actor);
+  if (!tauntTargetIds.length) return true;
+  return tauntTargetIds.includes(target.id);
+}
+
+function isDamageTargetAction(action) {
+  if (!action) return false;
+  return action.kind === "attack" || Boolean(action.effects?.skillAttack || action.effects?.prediction);
+}
+
+function isTargetAllowedByBlind(actor, action, target) {
+  if (!actor || !target || !isDamageTargetAction(action)) return true;
+  if (!hasStatus(actor, "ninja-blind")) return true;
+  return actor.id === target.id;
+}
+
+function getActiveTauntTargetIds(fighter) {
+  const ids = [];
+  for (const status of fighter?.statuses || []) {
+    const targetId = status.effects?.tauntTargetId;
+    if (!targetId) continue;
+    const target = state.melee.fighters.find((item) => item.id === targetId && item.hp > 0);
+    if (target && !ids.includes(targetId)) ids.push(targetId);
+  }
+  return ids;
+}
+
 function toggleMeleeTargetMenu(targetId) {
   if (state.mode !== "melee" || state.over) return;
   state.melee.openTargetId = state.melee.openTargetId === targetId ? "" : targetId;
@@ -1572,6 +2400,8 @@ function toggleMeleeTargetAction(targetId, actionId, kind) {
   const player = getMeleePlayer();
   const action = getActionById(actionId, player);
   if (!action || !canUseAction(player, action)) return;
+  const target = state.melee.fighters.find((fighter) => fighter.id === targetId);
+  if (!target || !canActionTargetFighter(action, target, player)) return;
   if (state.melee.selectionKind && state.melee.selectionKind !== kind) return;
 
   const existing = state.melee.targetSelections.get(targetId);
@@ -1669,8 +2499,12 @@ function submitMeleeAttacks() {
   if (player.hp <= 0) return;
 
   const attacks = [ui.meleeAttackA, ui.meleeAttackB]
-    .map((select) => ({ targetId: select.dataset.targetId, action: getActionById(select.value, player) }))
-    .filter((entry) => entry.targetId && entry.action);
+    .map((select) => ({
+      targetId: select.dataset.targetId,
+      target: state.melee.fighters.find((fighter) => fighter.id === select.dataset.targetId),
+      action: getActionById(select.value, player),
+    }))
+    .filter((entry) => entry.targetId && entry.target && entry.action && canActionTargetFighter(entry.action, entry.target, player));
   if (!attacks.length) return;
 
   const totalCost = attacks.reduce((sum, entry) => sum + getCost(player, entry.action), 0);
@@ -1697,6 +2531,15 @@ function submitMeleeTargetSelections() {
   const player = getMeleePlayer();
   const selections = getMeleeSelections();
   if (!player || player.hp <= 0 || !selections.length) return;
+  const invalid = selections.some((entry) => {
+    const target = state.melee.fighters.find((fighter) => fighter.id === entry.targetId);
+    return !target || !canActionTargetFighter(entry.action, target, player);
+  });
+  if (invalid) {
+    addLog("当前受到仇恨影响，攻击或伤害技能只能选择仇恨来源。");
+    clearMeleeTargeting();
+    return;
+  }
 
   const totalCost = getMeleeSelectionCost();
   if (totalCost > player.xp) {
@@ -1727,8 +2570,8 @@ function submitMeleeTargetSelections() {
   resolveMeleeRound(new Map([[player.id, { fighter: player, action, summaryAction: action }]]));
 }
 
-function resolveMeleeRound(playerPlans) {
-  const fighters = state.melee.fighters.filter((fighter) => fighter.hp > 0);
+function resolveMeleeRound(playerPlans, options = {}) {
+  const fighters = state.melee.fighters.filter((fighter) => isFighterTargetable(fighter));
   const plans = new Map(playerPlans);
   const logs = [];
   const notes = [];
@@ -1743,6 +2586,7 @@ function resolveMeleeRound(playerPlans) {
 
   for (const plan of plans.values()) {
     plan.action = applyForcedAction(plan.fighter, plan.action, logs);
+    plan.action = enforceTauntActionTargets(plan.fighter, plan.action, logs);
     plan.summaryAction = plan.action;
   }
 
@@ -1763,7 +2607,7 @@ function resolveMeleeRound(playerPlans) {
   const meleeHits = [];
   for (const intent of getRedirectedMeleeAttackIntents(getMeleeAttackIntents(plans), plans, defenses, logs)) {
     const target = state.melee.fighters.find((fighter) => fighter.id === intent.targetId);
-    if (!target || target.hp <= 0 || intent.source.hp <= 0) continue;
+    if (!target || !isFighterTargetable(target) || intent.source.hp <= 0) continue;
     const targetPlan = plans.get(target.id);
     const defense = targetPlan ? getIncomingDefense(target, targetPlan.action, intent.source) : defenses.get(target.id) || 0;
     const attack = getAttack(intent.source, intent.action, target);
@@ -1772,6 +2616,11 @@ function resolveMeleeRound(playerPlans) {
       sourcePlan.context.hit = true;
       meleeHits.push({ ...intent, target, sourcePlan, defense, attack });
     } else {
+      const sourcePlan = plans.get(intent.source.id);
+      if (sourcePlan) {
+        sourcePlan.context.missedActions ||= [];
+        sourcePlan.context.missedActions.push(intent.action);
+      }
       logs.push({ text: `${intent.source.label}用 ${intent.action.name} 攻击${target.label}，强度 ${attack} 未超过防御 ${formatDefense(defense)}。` });
     }
   }
@@ -1780,6 +2629,7 @@ function resolveMeleeRound(playerPlans) {
   for (const plan of plans.values()) {
     runMeleeAfterRoundHooks(plan);
     tickStatuses(plan.fighter, plan.context.notes);
+    advancePuppetStandby(plan.fighter, plan.context.notes);
     plan.fighter.lastSummary = summarizeMeleeAction(plan.fighter, plan.action, defenses.get(plan.fighter.id) || 0);
   }
 
@@ -1787,7 +2637,12 @@ function resolveMeleeRound(playerPlans) {
     logs.push({ text: note });
   }
 
-  for (const choice of collectEndPhaseChoices(fighters)) {
+  const endChoices = collectEndPhaseChoices(fighters);
+  if (options.deferCompletion) {
+    return { logs, notes, plans, defenses, endChoices };
+  }
+
+  for (const choice of endChoices) {
     for (const item of applyEndPhaseChoice(choice, chooseAutomaticEndPhaseOption(choice))) {
       logs.push(item);
     }
@@ -1798,6 +2653,44 @@ function resolveMeleeRound(playerPlans) {
   recordCompletedMatch();
   if (!state.over) state.round += 1;
   render();
+  return { logs, notes, plans, defenses, endChoices };
+}
+
+function enforceTauntActionTargets(fighter, action, logs) {
+  if (!getActiveTauntTargetIds(fighter).length) return action;
+  if (action.kind === "multiattack") {
+    const attacks = action.attacks.filter((entry) => {
+      const target = state.melee.fighters.find((item) => item.id === entry.targetId);
+      return target && canActionTargetFighter(entry.action, target, fighter);
+    });
+    if (attacks.length) {
+      const cost = attacks.reduce((sum, entry) => sum + getCost(fighter, entry.action), 0);
+      return { ...action, attacks, cost };
+    }
+    logs.push({ text: `${fighter.label}受到仇恨影响，无法攻击其他目标，改为 Ji。` });
+    return ACTION_BY_ID.ji;
+  }
+  if (action.kind === "multitarget-skill") {
+    const entries = action.entries.filter((entry) => {
+      const target = state.melee.fighters.find((item) => item.id === entry.targetId);
+      return target && canActionTargetFighter(entry.action, target, fighter);
+    });
+    if (entries.length) {
+      const cost = entries.reduce((sum, entry) => sum + getCost(fighter, entry.action), 0);
+      const defense = entries.reduce((best, entry) => Math.max(best, getDefense(fighter, entry.action)), 0);
+      return { ...action, entries, cost, defense };
+    }
+    logs.push({ text: `${fighter.label}受到仇恨影响，无法对其他目标使用伤害技能，改为 Ji。` });
+    return ACTION_BY_ID.ji;
+  }
+  if (action.kind === "attack" && action.targetId) {
+    const target = state.melee.fighters.find((item) => item.id === action.targetId);
+    if (!target || !canActionTargetFighter(action, target, fighter)) {
+      logs.push({ text: `${fighter.label}受到仇恨影响，无法攻击其他目标，改为 Ji。` });
+      return ACTION_BY_ID.ji;
+    }
+  }
+  return action;
 }
 
 function applyMeleePreActionEffects(plan, logs) {
@@ -1837,7 +2730,9 @@ function applyTargetedDefenseSkillEffects(actor, action, target, defenses, logs)
 function runMeleeAfterRoundHooks(plan) {
   if (plan.action.kind === "multitarget-skill") {
     for (const entry of plan.action.entries) {
-      runHook(plan.fighter, "afterRound", plan.fighter, null, { ...plan.context, selfAction: entry.action });
+      const target = state.melee.fighters.find((fighter) => fighter.id === entry.targetId) || null;
+      const targetedAction = target ? { ...entry.action, tacticalTarget: target } : entry.action;
+      runHook(plan.fighter, "afterRound", plan.fighter, target, { ...plan.context, selfAction: targetedAction });
     }
     return;
   }
@@ -1849,15 +2744,26 @@ function getMeleeAttackIntents(plans) {
   for (const plan of plans.values()) {
     if (plan.action.kind === "multiattack") {
       for (const attack of plan.action.attacks) {
-        intents.push({ source: plan.fighter, targetId: attack.targetId, action: attack.action });
+        if (!attack.action.tacticalSkipLegacyAttack) intents.push({ source: plan.fighter, targetId: attack.targetId, action: attack.action });
       }
     } else if (plan.action.kind === "multitarget-skill") {
       for (const entry of plan.action.entries) {
-        if (entry.action.kind === "attack") intents.push({ source: plan.fighter, targetId: entry.targetId, action: entry.action });
+        if (entry.action.kind === "attack" && !entry.action.tacticalSkipLegacyAttack) intents.push({ source: plan.fighter, targetId: entry.targetId, action: entry.action });
       }
-    } else if (plan.action.kind === "attack" && plan.action.targetId) {
+    } else if (plan.action.kind === "attack" && plan.action.targetId && !plan.action.tacticalSkipLegacyAttack) {
       intents.push({ source: plan.fighter, targetId: plan.action.targetId, action: plan.action });
     }
+  }
+  for (const plan of plans.values()) {
+    const prediction = plan.fighter.statuses?.find((status) => status.id === "astrologer-prediction");
+    const trackedTarget = prediction?.effects?.trackedTarget;
+    if (!trackedTarget || !isFighterTargetable(trackedTarget) || trackedTarget.id === plan.fighter.id) continue;
+    intents.push({
+      source: plan.fighter,
+      targetId: trackedTarget.id,
+      action: { ...ACTION_BY_ID["atk-5"], name: "预判·鬼刀" },
+      scheduled: true,
+    });
   }
   return intents;
 }
@@ -1882,35 +2788,60 @@ function applyMeleeHitDamage(hits, logs, notes) {
   const hitsByTarget = new Map();
   for (const hit of hits) {
     const context = { action: hit.action, damage: 1, notes };
-    const damage = getDamage(hit.source, hit.target, hit.action, context);
+    if (hit.target.flags?.puppetStandby) {
+      const standbyDamage = getEffectiveDamage(hit.source, hit.target, hit.action, context);
+      if (standbyDamage <= 0) {
+        logs.push({ kind: "impact", text: `${hit.source.label}用 ${hit.action.name} 命中${hit.target.label}，但未伤及真血。` });
+      }
+      continue;
+    }
+    const damage = Math.max(0, getDamage(hit.source, hit.target, hit.action, context));
     context.damage = damage;
+    if (damage <= 0) {
+      logs.push({ kind: "impact", text: `${hit.source.label}用 ${hit.action.name} 命中${hit.target.label}，但未伤及真血。` });
+      continue;
+    }
     hit.damage = damage;
     hit.context = context;
-    hit.sourcePlan.context.damageDealt += damage;
-    runHook(hit.source, "onDealDamage", hit.source, hit.target, context);
     if (!hitsByTarget.has(hit.target.id)) hitsByTarget.set(hit.target.id, []);
     hitsByTarget.get(hit.target.id).push(hit);
-    logs.push({ kind: "impact", text: `${hit.source.label}用 ${hit.action.name} 攻击${hit.target.label}，击穿防御 ${formatDefense(hit.defense)}，形成 ${damage} 点伤害。` });
   }
 
   for (const targetHits of hitsByTarget.values()) {
     const target = targetHits[0].target;
     const maxDamage = Math.max(...targetHits.map((hit) => hit.damage));
     const strongestHit = targetHits.find((hit) => hit.damage === maxDamage);
-    target.hp -= maxDamage;
-    logs.push({ kind: "impact", text: `${target.label}本回合受到的最高伤害为 ${maxDamage}，HP -${maxDamage}。` });
-    runHook(target, "afterTakeDamage", target, strongestHit.source, { action: strongestHit.action, damage: maxDamage, notes });
+    const targetContext = { ...strongestHit.context, damage: maxDamage, notes };
+    const effectiveDamage = Math.max(0, runBeforeTakeDamage(target, strongestHit.source, targetContext));
+    targetContext.damage = effectiveDamage;
+
+    if (effectiveDamage <= 0) {
+      for (const hit of targetHits) {
+        logs.push({ kind: "impact", text: `${hit.source.label}用 ${hit.action.name} 命中${target.label}，但未伤及真血。` });
+      }
+      continue;
+    }
+
+    for (const hit of targetHits) {
+      const rewardContext = { ...hit.context, damage: hit.damage, notes };
+      hit.sourcePlan.context.damageDealt += hit.damage;
+      runHook(hit.source, "onDealDamage", hit.source, target, rewardContext);
+      logs.push({ kind: "impact", text: `${hit.source.label}用 ${hit.action.name} 攻击${target.label}，击穿防御 ${formatDefense(hit.defense)}，形成 ${hit.damage} 点伤害。` });
+    }
+    target.hp -= effectiveDamage;
+    logs.push({ kind: "impact", text: `${target.label}本回合受到的最高伤害为 ${maxDamage}，实际 HP -${effectiveDamage}。` });
+    runHook(target, "afterTakeDamage", target, strongestHit.source, targetContext);
   }
 }
 
 function chooseMeleeAiAction(fighter) {
-  const targets = state.melee.fighters.filter((target) => target.id !== fighter.id && target.hp > 0);
-  const target = targets[Math.floor(Math.random() * targets.length)];
-  if (!target) return ACTION_BY_ID.ji;
   const affordableAttacks = getAvailableActions(fighter)
     .filter((action) => action.kind === "attack")
     .sort((a, b) => getCost(fighter, b) - getCost(fighter, a));
   if (affordableAttacks.length && Math.random() > 0.35) {
+    const legalTargets = state.melee.fighters.filter((target) => target.id !== fighter.id && canActionTargetFighter(affordableAttacks[0], target, fighter));
+    const target = legalTargets[Math.floor(Math.random() * legalTargets.length)];
+    if (!target) return ACTION_BY_ID.ji;
     const action = { ...affordableAttacks[0], targetId: target.id };
     return action;
   }
@@ -1939,9 +2870,9 @@ function summarizeMeleeAction(fighter, action, defense) {
 }
 
 function updateMeleeOutcome(logs) {
-  const alive = state.melee.fighters.filter((fighter) => fighter.hp > 0);
+  const alive = state.melee.fighters.filter((fighter) => !isFighterDefeated(fighter));
   const player = getMeleePlayer();
-  if (player.hp <= 0) {
+  if (isFighterDefeated(player)) {
     state.over = true;
     logs.push({ kind: "win", text: "你在混战中被击倒。" });
   } else if (alive.length <= 1) {
@@ -1955,7 +2886,7 @@ function getMeleePlayer() {
 }
 
 function getAliveMeleeOpponents(fighter) {
-  return state.melee.fighters.filter((target) => target.id !== fighter.id && target.hp > 0);
+  return state.melee.fighters.filter((target) => target.id !== fighter.id && isFighterTargetable(target));
 }
 
 function getMeleeFighterLabel(fighterId) {
@@ -1977,7 +2908,14 @@ function getActionById(actionId, fighter) {
 }
 
 function getHeroActions(fighter) {
-  return fighter?.hero?.activeSkills || [];
+  const skills = fighter?.hero?.activeSkills || [];
+  if (fighter?.heroId !== "pharmacist") return skills;
+  const loadout = fighter.flags.pharmacistLoadout || DEFAULT_PHARMACIST_LOADOUT;
+  return skills.filter((skill) => loadout.includes(skill.id));
+}
+
+function hasPharmacistLoadout(fighter, optionId) {
+  return fighter?.heroId === "pharmacist" && (fighter.flags.pharmacistLoadout || DEFAULT_PHARMACIST_LOADOUT).includes(optionId);
 }
 
 function isForcedToJi(fighter) {
@@ -1985,9 +2923,28 @@ function isForcedToJi(fighter) {
 }
 
 function applyForcedAction(fighter, action, logs) {
+  if (isPuppetInactive(fighter)) {
+    logs.push({ text: `${fighter.label}处于待机状态，本回合无法行动。` });
+    return getPuppetStandbyAction();
+  }
+  if (hasStatus(fighter, "ninja-blind") && isDamageTargetAction(action)) {
+    logs.push({ text: `${fighter.label}受到致盲影响，无法选中其他目标，改为 Ji。` });
+    return ACTION_BY_ID.ji;
+  }
   if (!isForcedToJi(fighter) || action.id === "ji") return action;
   logs.push({ text: `${fighter.label}受到迷步影响，本回合强制出 Ji。` });
   return ACTION_BY_ID.ji;
+}
+
+function getDuelSkillTarget(action, self, opponent) {
+  // Tactical mode supplies an explicit local target while keeping the legacy
+  // defaults intact for the old duel and room-code flows.
+  if (action.tacticalTarget) return action.tacticalTarget;
+  const effects = action.effects || {};
+  if (effects.pharmacistInvinciblePotion) return self;
+  return effects.targetDefense || effects.skillAttack || effects.revive || effects.drainXp
+    ? opponent
+    : self;
 }
 
 function getAvailableActions(fighter) {
@@ -2000,9 +2957,16 @@ function chooseEnemyAction() {
   const usefulDefenses = getUsefulDefenses(affordable, state.enemy, incomingThreat.maxAttack);
   const weighted = [];
   const enemyXp = state.enemy.xp;
+  const aiProfile = getAiProfile(state.enemy);
 
   for (const action of affordable) {
+    if (incomingThreat.scheduledAttack > 0 && usefulDefenses.length && !canAnswerScheduledThreat(state.enemy, action, incomingThreat.scheduledAttack)) {
+      continue;
+    }
     if (action.kind === "defense" && !usefulDefenses.includes(action)) {
+      continue;
+    }
+    if (action.kind === "attack" && !isUsefulAttackAction(state.enemy, state.player, action, incomingThreat, aiProfile)) {
       continue;
     }
     if (action.kind === "skill" && !isUsefulSkillAction(state.enemy, action, incomingThreat.maxAttack)) {
@@ -2011,7 +2975,7 @@ function chooseEnemyAction() {
 
     let weight = 1;
     if (action.id === "ji") {
-      weight = enemyXp < BALANCE.ai.lowEnergyTarget || incomingThreat.maxAttack === 0 ? 7 : 2;
+      weight = enemyXp < aiProfile.lowEnergyTarget || incomingThreat.maxAttack === 0 ? 7 : 2;
     }
     if (action.kind === "defense") {
       weight = getDefense(state.enemy, action) >= incomingThreat.maxAttack ? 5 : 2;
@@ -2019,16 +2983,39 @@ function chooseEnemyAction() {
     if (action.kind === "attack") {
       const cost = getCost(state.enemy, action);
       if (cost <= enemyXp && cost <= Math.max(1, incomingThreat.maxAttack + 2)) weight = 3;
-      if (cost >= BALANCE.ai.highThreatAttack && incomingThreat.maxAttack === 0) weight = 2;
+      if (cost >= aiProfile.highThreatAttack && incomingThreat.maxAttack === 0) weight = 2;
       if (cost === enemyXp && enemyXp >= 3) weight += 2;
     }
     if (action.kind === "skill") {
-      weight = getSkillWeight(state.enemy, action, incomingThreat.maxAttack);
+      weight = getSkillWeight(state.enemy, action, incomingThreat.maxAttack, aiProfile);
     }
     for (let i = 0; i < weight; i += 1) weighted.push(action);
   }
 
   return weighted[Math.floor(Math.random() * weighted.length)] || ACTION_BY_ID.ji;
+}
+
+function canAnswerScheduledThreat(fighter, action, scheduledAttack) {
+  if (action.kind === "defense") return getDefense(fighter, action) >= scheduledAttack;
+  if (action.kind === "skill") return getDefense(fighter, action) >= scheduledAttack || action.effects?.invincible;
+  return false;
+}
+
+function getAiProfile(fighter) {
+  const heroProfile = BALANCE.ai.heroProfiles?.[fighter?.heroId] || {};
+  return {
+    ...BALANCE.ai,
+    ...heroProfile,
+  };
+}
+
+function isUsefulAttackAction(attacker, target, action, incomingThreat, aiProfile) {
+  const cost = getCost(attacker, action);
+  const attack = getAttack(attacker, action, target);
+  if (incomingThreat.maxAttack === 0) {
+    return cost <= 1 || attack > getBestFreeDefense(target);
+  }
+  return cost <= Math.max(1, incomingThreat.maxAttack + 2) || (cost === attacker.xp && attacker.xp >= aiProfile.highThreatAttack);
 }
 
 function isUsefulSkillAction(fighter, action, maxIncomingAttack) {
@@ -2038,22 +3025,40 @@ function isUsefulSkillAction(fighter, action, maxIncomingAttack) {
   return Boolean(canBlock || canHeal);
 }
 
-function getSkillWeight(fighter, action, maxIncomingAttack) {
+function getSkillWeight(fighter, action, maxIncomingAttack, aiProfile = getAiProfile(fighter)) {
   const effects = action.effects || {};
   let weight = 1;
   if (getDefense(fighter, action) >= maxIncomingAttack && maxIncomingAttack > 0) weight += 3;
   if (effects.heal && fighter.hp < fighter.maxHp) weight += 4;
-  if (effects.invincible && maxIncomingAttack >= BALANCE.ai.highThreatAttack) weight += 3;
+  if (effects.invincible && maxIncomingAttack >= aiProfile.highThreatAttack) weight += 3;
   return weight;
 }
 
 function assessIncomingThreat(attacker, defender = null) {
   const affordableAttacks = getAvailableActions(attacker).filter((action) => action.kind === "attack");
-  const maxAttack = affordableAttacks.reduce((best, action) => Math.max(best, getAttack(attacker, action, defender)), 0);
+  const directAttack = affordableAttacks.reduce((best, action) => Math.max(best, getAttack(attacker, action, defender)), 0);
+  const scheduledAttack = getScheduledIncomingAttack(attacker, defender);
+  const maxAttack = Math.max(directAttack, scheduledAttack);
   return {
     canAttack: maxAttack > 0,
+    directAttack,
+    scheduledAttack,
     maxAttack,
   };
+}
+
+function getScheduledIncomingAttack(attacker, defender = null) {
+  let maxAttack = 0;
+  if (hasStatus(attacker, "astrologer-prediction")) {
+    maxAttack = Math.max(maxAttack, getAttack(attacker, ACTION_BY_ID["atk-5"], defender));
+  }
+  return maxAttack;
+}
+
+function getBestFreeDefense(fighter) {
+  return ACTIONS
+    .filter((action) => action.kind === "defense" && getCost(fighter, action) === 0)
+    .reduce((best, action) => Math.max(best, getDefense(fighter, action)), 0);
 }
 
 function getUsefulDefenses(affordableActions, defender, maxIncomingAttack) {
@@ -2071,6 +3076,10 @@ function getUsefulDefenses(affordableActions, defender, maxIncomingAttack) {
 
   const bestPartialDefense = defenses.reduce((best, action) => Math.max(best, getDefense(defender, action)), 0);
   return defenses.filter((action) => getDefense(defender, action) === bestPartialDefense);
+}
+
+function isResolvedAttack(action) {
+  return action?.kind === "attack" && !action.tacticalSkipLegacyAttack;
 }
 
 function resolveRound(playerAction, enemyAction) {
@@ -2093,8 +3102,8 @@ function resolveRound(playerAction, enemyAction) {
   player.xp += playerXpGain;
   enemy.xp += enemyXpGain;
 
-  applyPreDamageEffects(player, playerAction, logs);
-  applyPreDamageEffects(enemy, enemyAction, logs);
+  applyPreDamageEffects(player, playerAction, logs, getDuelSkillTarget(playerAction, player, enemy));
+  applyPreDamageEffects(enemy, enemyAction, logs, getDuelSkillTarget(enemyAction, enemy, player));
 
   const playerDefense = getDefense(player, playerAction);
   const enemyDefense = getDefense(enemy, enemyAction);
@@ -2110,7 +3119,10 @@ function resolveRound(playerAction, enemyAction) {
   applyScheduledGhostAttack(player, enemy, enemyIncomingDefense, logs, damageNotes, ui.enemyCard, contextForPlayer);
   applyScheduledGhostAttack(enemy, player, playerIncomingDefense, logs, damageNotes, ui.playerCard, contextForEnemy);
 
-  if (playerAction.kind === "attack" && enemyAction.kind === "attack") {
+  const playerUsesAttack = isResolvedAttack(playerAction);
+  const enemyUsesAttack = isResolvedAttack(enemyAction);
+
+  if (playerUsesAttack && enemyUsesAttack) {
     const playerHits = playerAttack > enemyIncomingDefense;
     const enemyHits = enemyAttack > playerIncomingDefense;
 
@@ -2126,20 +3138,20 @@ function resolveRound(playerAction, enemyAction) {
       logs.push({ text: `双方对攻强度同为 ${playerAttack}，互相抵消。` });
     }
   } else {
-    const playerHits = playerAction.kind === "attack" && playerAttack > enemyIncomingDefense;
-    const enemyHits = enemyAction.kind === "attack" && enemyAttack > playerIncomingDefense;
+    const playerHits = playerUsesAttack && playerAttack > enemyIncomingDefense;
+    const enemyHits = enemyUsesAttack && enemyAttack > playerIncomingDefense;
 
     if (playerHits) {
       contextForPlayer.hit = true;
       contextForPlayer.damageDealt = dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 击穿${enemy.label}防御 ${formatDefense(enemyIncomingDefense)}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
-    } else if (playerAction.kind === "attack") {
+    } else if (playerUsesAttack) {
       logs.push({ text: `${player.label}用 ${playerAction.name}，强度 ${playerAttack} 未超过${enemy.label}防御 ${formatDefense(enemyIncomingDefense)}。` });
     }
 
     if (enemyHits) {
       contextForEnemy.hit = true;
       contextForEnemy.damageDealt = dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 击穿${player.label}防御 ${formatDefense(playerIncomingDefense)}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
-    } else if (enemyAction.kind === "attack") {
+    } else if (enemyUsesAttack) {
       logs.push({ text: `${enemy.label}用 ${enemyAction.name}，强度 ${enemyAttack} 未超过${player.label}防御 ${formatDefense(playerIncomingDefense)}。` });
     }
   }
@@ -2152,6 +3164,8 @@ function resolveRound(playerAction, enemyAction) {
   runHook(enemy, "afterRound", enemy, player, contextForEnemy);
   tickStatuses(player, contextForPlayer.notes);
   tickStatuses(enemy, contextForEnemy.notes);
+  advancePuppetStandby(player, contextForPlayer.notes);
+  advancePuppetStandby(enemy, contextForEnemy.notes);
 
   for (const note of [...contextForPlayer.notes, ...contextForEnemy.notes]) {
     logs.push({ text: note });
@@ -2171,13 +3185,13 @@ function resolveRound(playerAction, enemyAction) {
     contextForEnemy,
   });
 
-  if (player.hp <= 0 && enemy.hp <= 0) {
+  if (isFighterDefeated(player) && isFighterDefeated(enemy)) {
     state.over = true;
     logs.push({ kind: "win", text: "同归于尽，平局。" });
-  } else if (enemy.hp <= 0) {
+  } else if (isFighterDefeated(enemy)) {
     state.over = true;
     logs.push({ kind: "win", text: "你赢了。" });
-  } else if (player.hp <= 0) {
+  } else if (isFighterDefeated(player)) {
     state.over = true;
     logs.push({ kind: "win", text: "电脑赢了。" });
   } else if (!logs.length) {
@@ -2235,9 +3249,13 @@ function buildActionAnimation(side, targetSide, action, attack, defense, context
 }
 
 function dealDamage(attacker, defender, action, text, logs, damageNotes, defenderCard) {
-  const context = { action, damage: 1, notes: damageNotes };
-  const damage = getDamage(attacker, defender, action, context);
-  context.damage = damage;
+  const context = { action, damage: action.damage || 1, notes: damageNotes };
+  const damage = getEffectiveDamage(attacker, defender, action, context);
+  if (damage <= 0) {
+    logs.push({ kind: "impact", text: `${attacker.label}用 ${action.name} 命中${defender.label}，但未伤及真血。` });
+    if (defenderCard) flash(defenderCard);
+    return 0;
+  }
   defender.hp -= damage;
   logs.push({ kind: "impact", text: text.replace("HP -1", `HP -${damage}`) });
   runHook(attacker, "onDealDamage", attacker, defender, context);
@@ -2249,6 +3267,8 @@ function dealDamage(attacker, defender, action, text, logs, damageNotes, defende
 function clearRoundPhaseFlags(fighter) {
   if (!fighter?.flags) return;
   fighter.flags.chaseTargets = [];
+  fighter.flags.extraRoundDefense = 0;
+  fighter.flags.roundPositiveEffects = [];
 }
 
 function collectEndPhaseChoices(fighters) {
@@ -2327,11 +3347,17 @@ function describeAction(action, fighter) {
   if (action.kind === "charge") return `花费 ${getCost(fighter, action)}，XP +${getXpGain(fighter, action)}，防御 ${formatDefense(getDefense(fighter, action))}`;
   if (action.kind === "defense") return `花费 ${getCost(fighter, action)}，防御 ${formatDefense(getDefense(fighter, action))}`;
   if (action.kind === "skill") return action.text;
-  return `花费 ${getCost(fighter, action)}，攻击强度 ${getAttack(fighter, action)}`;
+  return `花费 ${getCost(fighter, action)}，攻击强度 ${getAttack(fighter, action)}，距离 ${action.range || 1}`;
 }
 
 function getDefense(fighter, action) {
   let base = action.defense || 0;
+  if (fighter.flags?.extraRoundDefense) {
+    base = Math.max(base, fighter.flags.extraRoundDefense);
+  }
+  if (hasEffectiveStatus(fighter, "pharmacist-invincible")) {
+    base = Math.max(base, BALANCE.defenseGrades.invincible);
+  }
   if (action.effects?.upgradeDefense) {
     base = upgradeDefenseValue(base);
   }
@@ -2356,6 +3382,7 @@ function getIncomingDefense(defender, defenderAction, attacker) {
 
 function getPointDefenseAgainst(fighter, action, target) {
   if (!action || !target) return 0;
+  if (action.tacticalSkipLegacyAttack) return 0;
   if (action.kind === "multiattack") {
     return action.attacks
       .filter((attack) => attack.targetId === target.id)
@@ -2388,8 +3415,55 @@ function getDamage(attacker, defender, action, context) {
   return runHook(attacker, "modifyDamage", context.damage, attacker, defender, context);
 }
 
+function getEffectiveDamage(attacker, defender, action, context) {
+  const modified = getDamage(attacker, defender, action, context);
+  context.damage = Math.max(0, modified);
+  const afterDefense = runBeforeTakeDamage(defender, attacker, context);
+  context.damage = Math.max(0, afterDefense);
+  return context.damage;
+}
+
+function runBeforeTakeDamage(defender, attacker, context) {
+  const hook = defender.hero.hooks.beforeTakeDamage;
+  if (!hook) return context.damage;
+  const result = hook(defender, attacker, context);
+  return result === undefined ? context.damage : result;
+}
+
+function isPuppetInactive(fighter) {
+  return Boolean(fighter?.flags?.puppetStandby || fighter?.flags?.puppetPendingStandby);
+}
+
+function isFighterProtectedFromDefeat(fighter) {
+  return Boolean(fighter?.flags?.puppetStandby || fighter?.flags?.puppetPendingStandby);
+}
+
+function isFighterDefeated(fighter) {
+  return fighter.hp <= 0 && !isFighterProtectedFromDefeat(fighter);
+}
+
+function isFighterTargetable(fighter) {
+  return fighter.hp > 0 || Boolean(fighter?.flags?.puppetStandby || fighter?.flags?.puppetPendingStandby);
+}
+
+function getPuppetStandbyAction() {
+  return {
+    id: "puppet-standby-action",
+    kind: "charge",
+    name: "待机",
+    cost: 0,
+    power: 0,
+    defense: 0,
+    xpGain: 0,
+  };
+}
+
 function hasStatus(fighter, statusId) {
   return fighter.statuses.some((status) => status.id === statusId);
+}
+
+function hasEffectiveStatus(fighter, statusId) {
+  return fighter.statuses.some((status) => status.id === statusId && !(status.delayed && status.fresh));
 }
 
 function addIceShards(fighter, amount) {
@@ -2401,18 +3475,64 @@ function setStatus(fighter, status) {
   fighter.statuses.push(status);
 }
 
+function markRoundPositiveEffect(fighter, name) {
+  if (!fighter?.flags || !name) return;
+  const effects = fighter.flags.roundPositiveEffects || [];
+  if (!effects.includes(name)) effects.push(name);
+  fighter.flags.roundPositiveEffects = effects;
+}
+
+function reviveAsClassic(fighter) {
+  fighter.heroId = "classic";
+  fighter.hero = HEROES.classic;
+  fighter.startingHp = HEROES.classic.maxHp;
+  fighter.maxHp = HEROES.classic.maxHp + BALANCE.maxHpBonus;
+  fighter.hp = 1;
+  fighter.xp = BALANCE.heroes.pharmacist.reviveXp;
+  fighter.flags = {};
+  fighter.statuses = [];
+  fighter.lastSummary = "复活中";
+}
+
 function applyPostDefenseSkillEffects(fighter, action, target, targetDefense, logs) {
-  if (!action.effects?.drainXp) return;
-  const canDrain = BALANCE.heroes.iceSorcerer.daggerPower > targetDefense;
-  if (!canDrain) {
-    logs.push({ text: `${fighter.label}使用 ${action.name}，但${target.label}有防御等级，吸取失败。` });
-    return;
+  if (action.effects?.skillAttack) {
+    const attack = action.effects.skillAttackPower || action.power || 0;
+    if (attack > targetDefense) {
+      const damageNotes = [];
+      const damageAction = { ...action, kind: "attack", power: attack, damage: action.effects.damage || 1 };
+      dealDamage(fighter, target, damageAction, `${fighter.label}用 ${action.name} 击穿${target.label}防御 ${formatDefense(targetDefense)}，${target.label} HP -1。`, logs, damageNotes);
+      if (action.effects.poisonTurns && target.hp > 0) {
+        setStatus(target, {
+          id: "pharmacist-poisoned",
+          type: "negative",
+          name: "中毒",
+          text: `${action.effects.poisonTurns} 回合`,
+          turns: action.effects.poisonTurns,
+          fresh: true,
+          effects: {
+            damagePerTurn: BALANCE.heroes.pharmacist.poisonTickDamage,
+          },
+        });
+        damageNotes.push(`${target.label}中毒，接下来 ${action.effects.poisonTurns} 回合每回合 HP -${BALANCE.heroes.pharmacist.poisonTickDamage}。`);
+      }
+      for (const note of damageNotes) logs.push({ text: note });
+    } else {
+      logs.push({ text: `${fighter.label}用 ${action.name}，强度 ${attack} 未超过${target.label}防御 ${formatDefense(targetDefense)}。` });
+    }
   }
 
-  const drained = BALANCE.heroes.astrologer.drainAmount;
-  target.xp = Math.max(0, target.xp - drained);
-  fighter.xp += drained;
-  logs.push({ text: `${fighter.label}使用 ${action.name}，从${target.label}身上吸取 ${drained} XP。` });
+  if (action.effects?.drainXp) {
+    const canDrain = BALANCE.heroes.iceSorcerer.daggerPower > targetDefense;
+    if (!canDrain) {
+      logs.push({ text: `${fighter.label}使用 ${action.name}，但${target.label}有防御等级，吸取失败。` });
+      return;
+    }
+
+    const drained = BALANCE.heroes.astrologer.drainAmount;
+    target.xp = Math.max(0, target.xp - drained);
+    fighter.xp += drained;
+    logs.push({ text: `${fighter.label}使用 ${action.name}，从${target.label}身上吸取 ${drained} XP。` });
+  }
 }
 
 function applyScheduledGhostAttack(source, target, targetDefense, logs, damageNotes, targetCard, context) {
@@ -2439,15 +3559,71 @@ function tickStatuses(fighter, notes) {
       remaining.push(status);
       continue;
     }
+    if (status.effects?.damagePerTurn && fighter.hp > 0) {
+      const context = {
+        action: { id: status.id, kind: "status", name: status.name },
+        notes,
+        damage: status.effects.damagePerTurn,
+      };
+      const damage = Math.max(0, runBeforeTakeDamage(fighter, null, context));
+      context.damage = damage;
+      if (damage > 0) {
+        fighter.hp -= damage;
+        notes.push(`${fighter.label}受到${status.name}影响，HP -${damage}。`);
+        runHook(fighter, "afterTakeDamage", fighter, null, context);
+      } else {
+        notes.push(`${fighter.label}受到${status.name}影响，但未伤及真血。`);
+      }
+    }
     status.turns -= 1;
     if (status.turns > 0) {
       status.text = `${status.turns} 回合`;
       remaining.push(status);
     } else {
+      if (status.effects?.healTo && fighter.hp > 0 && fighter.hp < status.effects.healTo) {
+        fighter.hp = Math.min(fighter.maxHp, status.effects.healTo);
+        notes.push(`${fighter.label}的${status.name}生效，HP 恢复至 ${fighter.hp}。`);
+      }
       notes.push(`${fighter.label}的${status.name}结束。`);
     }
   }
   fighter.statuses = remaining;
+}
+
+function advancePuppetStandby(fighter, notes) {
+  if (fighter.heroId !== "puppet") return;
+  if (fighter.flags.puppetPendingStandby) {
+    fighter.flags.puppetPendingStandby = false;
+    fighter.flags.puppetStandby = true;
+    fighter.flags.puppetStandbyHp = BALANCE.heroes.puppet.standbyHp;
+    fighter.flags.puppetStandbyTurns = BALANCE.heroes.puppet.standbyTurns;
+    setStatus(fighter, {
+      id: "puppet-standby",
+      name: "待机",
+      text: `${fighter.flags.puppetStandbyHp} 储备 / ${fighter.flags.puppetStandbyTurns} 回合`,
+    });
+    notes.push(`${fighter.label}进入待机状态，获得 ${BALANCE.heroes.puppet.standbyHp} 点储备生命值。`);
+    return;
+  }
+  if (!fighter.flags.puppetStandby) return;
+  fighter.flags.puppetStandbyTurns -= 1;
+  if (fighter.flags.puppetStandbyHp <= 0) {
+    fighter.flags.puppetStandby = false;
+    fighter.statuses = fighter.statuses.filter((status) => status.id !== "puppet-standby");
+    notes.push(`${fighter.label}待机储备生命耗尽，无法复活。`);
+    return;
+  }
+  if (fighter.flags.puppetStandbyTurns <= 0) {
+    fighter.flags.puppetStandby = false;
+    fighter.flags.puppetShield = 1;
+    fighter.hp = BALANCE.heroes.puppet.reviveHp;
+    fighter.xp += BALANCE.heroes.puppet.reviveXp;
+    fighter.statuses = fighter.statuses.filter((status) => status.id !== "puppet-standby");
+    notes.push(`${fighter.label}待机完成，复活并获得 ${BALANCE.heroes.puppet.reviveXp} XP、${BALANCE.heroes.puppet.reviveHp} HP 和 1 层生命盾。`);
+    return;
+  }
+  const standby = fighter.statuses.find((status) => status.id === "puppet-standby");
+  if (standby) standby.text = `${fighter.flags.puppetStandbyHp} 储备 / ${fighter.flags.puppetStandbyTurns} 回合`;
 }
 
 function applyPreDamageEffects(fighter, action, logs, target = fighter) {
@@ -2455,6 +3631,54 @@ function applyPreDamageEffects(fighter, action, logs, target = fighter) {
   const effects = action.effects || {};
   const details = [];
   const targetLabel = target === fighter ? "" : `，目标 ${target.label}`;
+
+  if (action.id === "priest-shield" || action.id === "priest-heal") {
+    markRoundPositiveEffect(target, action.name);
+  }
+  if (action.id === "pharmacist-invincible-potion") {
+    markRoundPositiveEffect(fighter, action.name);
+    markRoundPositiveEffect(target, action.name);
+  }
+  if (effects.invincible || action.defense >= BALANCE.defenseGrades.invincible) {
+    markRoundPositiveEffect(fighter, action.name);
+  }
+
+  if (effects.targetDefense) {
+    target.flags.extraRoundDefense = Math.max(target.flags.extraRoundDefense || 0, effects.targetDefense);
+    details.push(`${target === fighter ? "自身" : "目标"}本回合防御 ${formatDefense(effects.targetDefense)}`);
+  }
+
+  if (effects.pharmacistInvinciblePotion) {
+    setStatus(target, {
+      id: "pharmacist-invincible",
+      type: "positive",
+      name: "无敌药剂",
+      text: `${BALANCE.heroes.pharmacist.invinciblePotionTurns} 回合`,
+      turns: BALANCE.heroes.pharmacist.invinciblePotionTurns,
+      fresh: true,
+      delayed: true,
+    });
+    details.push(`${target === fighter ? "自身" : "目标"}下回合起无敌 ${BALANCE.heroes.pharmacist.invinciblePotionTurns} 回合`);
+  }
+
+  if (effects.stealth) {
+    markRoundPositiveEffect(target, action.name);
+    details.push(`接下来 ${BALANCE.heroes.ninja.stealthTurns} 回合小防`);
+  }
+
+  if (effects.puppetShield) {
+    markRoundPositiveEffect(target, "生命盾");
+    details.push("本回合中防，回合后放置生命盾");
+  }
+
+  if (effects.revive) {
+    if (target.hp <= 0) {
+      reviveAsClassic(target);
+      details.push(`复活为经典武者，获得 ${BALANCE.heroes.pharmacist.reviveXp} XP`);
+    } else {
+      details.push("目标尚未死亡，复活无效");
+    }
+  }
 
   if (effects.clearNegative) {
     const before = target.statuses.length;
@@ -2847,6 +4071,7 @@ async function apiRequest(path, payload) {
   return data;
 }
 
+if (!window.__JI_TACTICAL_REBUILD__) {
 ui.resetBtn.addEventListener("click", resetGame);
 ui.cpuModeBtn.addEventListener("click", resetGame);
 ui.meleeModeBtn.addEventListener("click", startMeleeGame);
@@ -2860,6 +4085,10 @@ ui.meleeSubmitBtn.addEventListener("click", submitMeleeAttacks);
 document.addEventListener("keydown", handleMeleeKeyboardSubmit);
 ui.chaseDrainBtn.addEventListener("click", () => resolvePendingEndChoice("drain"));
 ui.chaseGainBtn.addEventListener("click", () => resolvePendingEndChoice("gain"));
+ui.pharmacistLoadoutCollapse.addEventListener("click", () => {
+  state.pharmacistLoadoutCollapsed = true;
+  render();
+});
 ui.manualBtn.addEventListener("click", openManualDetail);
 ui.manualClose.addEventListener("click", closeManualDetail);
 ui.manualDetail.addEventListener("click", (event) => {
@@ -2873,14 +4102,27 @@ ui.historyDetail.addEventListener("click", (event) => {
 ui.clearHistoryBtn.addEventListener("click", clearCurrentPlayerHistory);
 ui.playerAvatar.addEventListener("click", () => openHeroDetail(state.player));
 ui.enemyAvatar.addEventListener("click", () => openHeroDetail(state.enemy));
+ui.playerCard.addEventListener("click", (event) => {
+  if (event.target.closest?.(".hero-avatar")) return;
+  openHeroPicker("player");
+});
+ui.enemyCard.addEventListener("click", (event) => {
+  if (event.target.closest?.(".hero-avatar")) return;
+  openHeroPicker("enemy");
+});
 ui.heroDetailClose.addEventListener("click", closeHeroDetail);
 ui.heroDetail.addEventListener("click", (event) => {
   if (event.target === ui.heroDetail) closeHeroDetail();
+});
+ui.heroPickerClose.addEventListener("click", closeHeroPicker);
+ui.heroPicker.addEventListener("click", (event) => {
+  if (event.target === ui.heroPicker) closeHeroPicker();
 });
 if (document.addEventListener) {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeHeroDetail();
+      closeHeroPicker();
       closeManualDetail();
       closeHistoryDetail();
     }
@@ -2890,14 +4132,18 @@ ui.clearLogBtn.addEventListener("click", () => {
   ui.battleLog.innerHTML = "";
 });
 ui.playerHero.addEventListener("change", () => {
+  state.pharmacistLoadoutCollapsed = false;
+  saveHeroSelection();
   if (state.mode === "cpu") resetGame();
   if (state.mode === "melee") startMeleeGame();
 });
 ui.enemyHero.addEventListener("change", () => {
+  saveHeroSelection();
   if (state.mode === "cpu") resetGame();
   if (state.mode === "melee") startMeleeGame();
 });
 ui.enemyBHero.addEventListener("change", () => {
+  saveHeroSelection();
   if (state.mode === "melee") startMeleeGame();
 });
 ui.playerName.addEventListener("change", savePlayerName);
@@ -2907,3 +4153,4 @@ populateHeroes();
 initializePlayerName();
 renderActions();
 resetGame();
+}

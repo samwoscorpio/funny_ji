@@ -54,6 +54,30 @@ def find_slot(room, player_id):
     return None
 
 
+def sanitize_loadout(value):
+    if not isinstance(value, list):
+        return []
+    return [str(item)[:32] for item in value[:2] if isinstance(item, str)]
+
+
+def validate_tactical_plan(plan, phase):
+    if not isinstance(plan, dict) or plan.get("phase") != phase:
+        return "计划阶段不匹配。"
+    if phase == "movement":
+        path = plan.get("path", [])
+        if not isinstance(path, list) or len(path) > 1:
+            return "移动计划无效。"
+        for tile in path:
+            if not isinstance(tile, dict) or not isinstance(tile.get("row"), int) or not isinstance(tile.get("col"), int):
+                return "移动坐标无效。"
+        return None
+    if phase == "action":
+        if not isinstance(plan.get("actionId"), str) or not plan["actionId"]:
+            return "行动计划缺少动作。"
+        return None
+    return "未知计划阶段。"
+
+
 def public_room(room, player_id=None):
     submitted = {
         "p1": bool(room["choices"].get("p1")),
@@ -62,6 +86,8 @@ def public_room(room, player_id=None):
     return {
         "code": room["code"],
         "round": room["round"],
+        "mode": room.get("mode", "legacy"),
+        "phase": room.get("phase", "action"),
         "players": room["players"],
         "submitted": submitted,
         "result": room["result"],
@@ -104,8 +130,14 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data = read_json(self)
             hero_id = data.get("heroId")
+            mode = data.get("mode", "legacy")
+            player_name = str(data.get("playerName") or "玩家")[:16]
+            loadout = sanitize_loadout(data.get("pharmacistLoadout"))
             if not hero_id:
                 error(self, 400, "缺少英雄。")
+                return
+            if mode not in ("legacy", "tactical"):
+                error(self, 400, "未知房间模式。")
                 return
             with LOCK:
                 code = new_code()
@@ -113,8 +145,10 @@ class Handler(BaseHTTPRequestHandler):
                 ROOMS[code] = {
                     "code": code,
                     "round": 1,
+                    "mode": mode,
+                    "phase": "movement" if mode == "tactical" else "action",
                     "players": {
-                        "p1": {"playerId": player_id, "heroId": hero_id},
+                        "p1": {"playerId": player_id, "heroId": hero_id, "name": player_name, "pharmacistLoadout": loadout},
                         "p2": None,
                     },
                     "choices": {},
@@ -129,6 +163,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data = read_json(self)
             hero_id = data.get("heroId")
+            player_name = str(data.get("playerName") or "玩家")[:16]
+            loadout = sanitize_loadout(data.get("pharmacistLoadout"))
             if not hero_id:
                 error(self, 400, "缺少英雄。")
                 return
@@ -141,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
                     error(self, 409, "房间已满。")
                     return
                 player_id = secrets.token_urlsafe(12)
-                room["players"]["p2"] = {"playerId": player_id, "heroId": hero_id}
+                room["players"]["p2"] = {"playerId": player_id, "heroId": hero_id, "name": player_name, "pharmacistLoadout": loadout}
             json_response(self, 200, {"code": code, "playerId": player_id, "slot": "p2"})
         except Exception as exc:
             error(self, 400, str(exc))
@@ -170,8 +206,9 @@ class Handler(BaseHTTPRequestHandler):
             player_id = data.get("playerId")
             round_no = data.get("round")
             action_id = data.get("actionId")
-            if not player_id or not action_id:
-                error(self, 400, "缺少玩家或动作。")
+            plan = data.get("plan")
+            if not player_id:
+                error(self, 400, "缺少玩家身份。")
                 return
             with LOCK:
                 room = ROOMS.get(code)
@@ -191,15 +228,35 @@ class Handler(BaseHTTPRequestHandler):
                 if room["result"]:
                     json_response(self, 200, public_room(room, player_id))
                     return
-                room["choices"][slot] = action_id
+                if room.get("mode") == "tactical":
+                    plan_error = validate_tactical_plan(plan, room.get("phase"))
+                    if plan_error:
+                        error(self, 400, plan_error)
+                        return
+                    room["choices"][slot] = plan
+                else:
+                    if not action_id:
+                        error(self, 400, "缺少动作。")
+                        return
+                    room["choices"][slot] = action_id
                 if room["choices"].get("p1") and room["choices"].get("p2"):
-                    room["result"] = {
-                        "round": room["round"],
-                        "actions": {
-                            "p1": room["choices"]["p1"],
-                            "p2": room["choices"]["p2"],
-                        },
-                    }
+                    if room.get("mode") == "tactical":
+                        room["result"] = {
+                            "round": room["round"],
+                            "phase": room["phase"],
+                            "plans": {
+                                "p1": room["choices"]["p1"],
+                                "p2": room["choices"]["p2"],
+                            },
+                        }
+                    else:
+                        room["result"] = {
+                            "round": room["round"],
+                            "actions": {
+                                "p1": room["choices"]["p1"],
+                                "p2": room["choices"]["p2"],
+                            },
+                        }
                     room["acks"] = set()
                 payload = public_room(room, player_id)
             json_response(self, 200, payload)
@@ -224,7 +281,12 @@ class Handler(BaseHTTPRequestHandler):
                     room["acks"].add(slot)
                     active_slots = {key for key, value in room["players"].items() if value}
                     if active_slots and room["acks"] >= active_slots:
-                        room["round"] += 1
+                        if room.get("mode") == "tactical" and room.get("phase") == "movement":
+                            room["phase"] = "action"
+                        else:
+                            room["round"] += 1
+                            if room.get("mode") == "tactical":
+                                room["phase"] = "movement"
                         room["choices"] = {}
                         room["result"] = None
                         room["acks"] = set()

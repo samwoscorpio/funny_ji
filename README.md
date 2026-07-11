@@ -1,47 +1,36 @@
-# Clap Duel
+# 好玩的 Ji - 地图战术原型
 
-Static browser game with optional 1v1 room-code mode.
+当前主界面是一个可直接游玩的地图战术原型，支持 1v1 人机、1v2 人机与在线真人 1v1。所有英雄的原有 HP、起始 XP、被动、主动技能、攻击、防御与伤害结算仍由 `game.js` 的旧战斗内核负责；`tactical.js` 只提供地图、行动卡与同时规划的交互层。
 
-## Local 1v1 rooms
-
-The room-code mode needs the small local server because GitHub Pages can only host static files.
+## 本地运行
 
 ```bash
 python3 server.py
 ```
 
-Then open `http://127.0.0.1:8125/`.
+打开 `http://127.0.0.1:8125/`。
 
-For LAN testing, start it with `HOST=0.0.0.0 python3 server.py`, then open the computer's LAN address from the other device.
+也可以直接打开 `index.html` 测试纯本地人机原型。房间代码功能需要通过上述服务器运行。
 
-## Cloud 1v1 deployment
+## 新玩法
 
-GitHub Pages can still host the single-player/static version, but it cannot run the room server. For online 1v1, deploy this whole folder as a Web Service.
+- 固定 8×8 六边形战术地图；双方每回合最多移动 1 格。
+- 双方先锁定并同时结算移动；位置稳定后再选择行动卡并同时结算出招。
+- 普通攻击只能选择当前位置相邻的敌方，不再需要预判移动后的落点。
+- Ji、防御、长刀在内的攻击和英雄主动技能均来自旧版动作数据，不使用第二套数值；长刀花费 2 XP、强度 1、距离 2。
+- 能量点在回合结束时提供 +1 XP。
+- 中央据点需要连续守住一回合；下一回合仍在点上且拥有 2 XP 时，支付 2 XP 获得 1 分并被刷新到外围位置。率先获得 3 分获胜；HP 归零仍按旧规则立即决定击倒胜负。
+- 在线 1v1 通过房间代码配对：双方先提交移动计划，位置同步后再提交行动计划；每一阶段都在双方确认后推进。
+- 历史对局使用既有本地记录结构，并额外写入 `winReason`（`knockout` 或 `objective`）。
 
-### Render
+## 当前原型限制
 
-1. Push all files in this folder to GitHub, including `server.py`, `render.yaml`, and `requirements.txt`.
-2. Open Render, choose New > Blueprint, and connect the GitHub repository.
-3. Render will read `render.yaml` and run:
+- 尚无真实抽牌、卡组、弃牌堆或随机卡包；行动卡是固定动作栏的战术化展示。
+- 地图固定，草丛暂时只有地形表现，不提供隐身。
+- 主动技能继续沿用旧版结算；地图先对普通攻击实施严格的落点预判。
+- 在线房间使用 `server.py` 的进程内房间数据。Render 重启、休眠或重新部署后，正在进行的房间会失效。
+- 混战测试与旧版 UI 逻辑仍保留在代码中，尚未迁移为地图模式。
 
-```bash
-HOST=0.0.0.0 python3 server.py
-```
+## 云端部署
 
-4. Open the Render service URL. Share that URL with friends.
-
-The free Render plan may sleep after inactivity, so the first visit can take a little longer.
-
-### Docker platforms
-
-Use the included `Dockerfile` on platforms such as Railway, Fly.io, or any VPS that can run Docker.
-
-The service must expose the port from the `PORT` environment variable. The app already reads `PORT`, so most platforms will work without code changes.
-
-## GitHub Pages static version
-
-1. Create a new public GitHub repository.
-2. Upload `index.html`, `styles.css`, and `game.js` to the repository root.
-3. In GitHub, open Settings > Pages.
-4. Choose "Deploy from a branch", then select `main` and `/root`.
-5. Open the published Pages URL.
+GitHub Pages 可以托管静态人机版本。若要使用房间代码，需使用 Render、Railway、Fly.io 或 VPS 运行本文件夹中的 `server.py`；Render 可直接读取 `render.yaml`。
