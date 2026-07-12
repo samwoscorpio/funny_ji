@@ -56,7 +56,7 @@
   const ROW_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H"];
   const tacticalUi = {
     round: document.querySelector("#tacticalRound"), phase: document.querySelector("#tacticalPhase"), score: document.querySelector("#tacticalScore"), modeLabel: document.querySelector("#tacticalModeLabel"),
-    shell: document.querySelector("#tacticalShell"),
+    shell: document.querySelector("#tacticalShell"), mapSelect: document.querySelector("#tacticalMapSelectBtn"), menuButton: document.querySelector("#tacticalMenuBtn"), menuClose: document.querySelector("#tacticalMenuClose"), menuBackdrop: document.querySelector("#tacticalMenuBackdrop"),
     map: document.querySelector("#tacticalMap"), mapHint: document.querySelector("#mapHint"),
     playerCard: document.querySelector("#playerTacticalCard"), playerOverview: document.querySelector("#playerTeamOverview"), enemyCard: document.querySelector("#enemyTacticalCard"), enemyBCard: document.querySelector("#enemyBTacticalCard"),
     enemyOverview: document.querySelector("#enemyTeamOverview"),
@@ -83,6 +83,7 @@
   let pharmacistLoadoutDraft = getPlayerPharmacistLoadout();
   let activeMapConfig = cloneMapConfig(DEFAULT_TACTICAL_MAP);
   let tacticalLogEntries = [];
+  let tacticalMenuOpen = true;
   const mapEditor = {
     active: false,
     tool: "objective",
@@ -90,6 +91,7 @@
     draft: null,
     spawns: null,
     mapId: null,
+    libraryId: null,
     notice: "",
     lastPointerKey: "",
     lastPointerAt: 0,
@@ -301,7 +303,7 @@
   function renderMapLibraryControls() {
     if (!tacticalUi.mapEditorLibrary || !tacticalUi.mapEditorName) return;
     const library = readMapLibrary();
-    const selectedId = mapEditor.mapId || getActiveMapId();
+    const selectedId = mapEditor.libraryId || mapEditor.mapId || getActiveMapId();
     tacticalUi.mapEditorLibrary.textContent = "";
     tacticalUi.mapEditorLibrary.add(new Option("新地图", ""));
     for (const entry of library) {
@@ -771,6 +773,7 @@
       setTacticalRoomStatus("房间已开始后暂不编辑地图；请先退出或重开。");
       return;
     }
+    tacticalMenuOpen = true;
     mapEditor.active = true;
     mapEditor.tool = mapEditor.tool || "objective";
     mapEditor.anchor = null;
@@ -781,6 +784,7 @@
     applySpawnDraftToControls(mapEditor.spawns);
     const activeEntry = getActiveMapEntry();
     mapEditor.mapId = activeEntry?.id || "";
+    mapEditor.libraryId = activeEntry?.id || "";
     if (tacticalUi.mapEditorName) tacticalUi.mapEditorName.value = activeEntry?.name || "";
     mapEditor.notice = "";
     hideTileTooltip();
@@ -793,6 +797,7 @@
     mapEditor.draft = null;
     mapEditor.spawns = null;
     mapEditor.mapId = null;
+    mapEditor.libraryId = null;
     mapEditor.notice = "";
     mapEditor.lastPointerKey = "";
     mapEditor.lastPointerAt = 0;
@@ -805,6 +810,7 @@
     mapEditor.draft = cloneMapConfig(DEFAULT_TACTICAL_MAP);
     mapEditor.spawns = getDefaultSpawnDraft();
     mapEditor.mapId = "";
+    mapEditor.libraryId = "";
     if (tacticalUi.mapEditorName) tacticalUi.mapEditorName.value = "默认地图副本";
     mapEditor.anchor = null;
     mapEditor.notice = "已恢复默认地图与当前模式出生点，点击保存后生效。";
@@ -815,7 +821,11 @@
     if (!mapEditor.active || !mapEditor.draft || !mapEditor.spawns) return;
     const next = sanitizeMapConfig(mapEditor.draft);
     const spawns = sanitizeSpawnDraft(mapEditor.spawns, next);
-    const entry = saveMapLibraryEntry(tacticalUi.mapEditorName?.value, next, spawns, mapEditor.mapId || tacticalUi.mapEditorLibrary?.value || "");
+    const name = normalizeMapName(tacticalUi.mapEditorName?.value);
+    const sourceEntry = readMapLibrary().find((item) => item.id === mapEditor.mapId) || null;
+    const updatesSource = Boolean(sourceEntry && sourceEntry.name === name);
+    const entry = saveMapLibraryEntry(name, next, spawns, updatesSource ? sourceEntry.id : "");
+    const savedAsCopy = Boolean(sourceEntry && !updatesSource);
     writeStorage(TACTICAL_MAP_KEY, JSON.stringify(next));
     persistSpawnDraft(spawns);
     applyMapConfig(next);
@@ -825,11 +835,12 @@
     mapEditor.draft = null;
     mapEditor.spawns = null;
     mapEditor.mapId = entry.id;
+    mapEditor.libraryId = entry.id;
     mapEditor.notice = "";
     initializeTacticalSetup();
     applySpawnDraftToControls(spawns);
     resetTacticalGame();
-    addTacticalLog(`地图「${entry.name}」已保存并启用。`, "score");
+    addTacticalLog(savedAsCopy ? `地图已另存为「${entry.name}」；原地图「${sourceEntry.name}」已保留。` : `地图「${entry.name}」已保存并启用。`, "score");
     renderTactical();
   }
 
@@ -840,6 +851,7 @@
     mapEditor.draft = cloneMapConfig(entry.map);
     mapEditor.spawns = sanitizeSpawnDraft(entry.spawns || getDefaultSpawnDraft(), entry.map);
     mapEditor.mapId = entry.id;
+    mapEditor.libraryId = entry.id;
     if (tacticalUi.mapEditorName) tacticalUi.mapEditorName.value = entry.name;
     mapEditor.anchor = null;
     mapEditor.notice = `已载入「${entry.name}」，可继续编辑或保存启用。`;
@@ -854,6 +866,7 @@
     writeMapLibrary(next);
     if (getActiveMapId() === entry.id) setActiveMapId("");
     if (mapEditor.mapId === entry.id) mapEditor.mapId = "";
+    if (mapEditor.libraryId === entry.id) mapEditor.libraryId = "";
     if (tacticalUi.mapEditorName?.value === entry.name) tacticalUi.mapEditorName.value = "";
     mapEditor.notice = `已删除「${entry.name}」。当前编辑草稿不会丢失。`;
     renderTactical();
@@ -1358,6 +1371,10 @@
     tacticalUi.shell.dataset.battleMode = tactical.battleMode;
     tacticalUi.shell.classList.toggle("is-targeting", tactical.selection === "target");
     tacticalUi.shell.classList.toggle("is-map-editing", mapEditor.active);
+    tacticalUi.shell.classList.toggle("is-menu-open", tacticalMenuOpen);
+    tacticalUi.menuBackdrop.hidden = !tacticalMenuOpen;
+    tacticalUi.menuBackdrop.classList.toggle("is-map-editing", mapEditor.active);
+    tacticalUi.menuButton.setAttribute("aria-expanded", String(tacticalMenuOpen));
     tacticalUi.round.textContent = isPreparationRound() ? "预备回合" : `第 ${state.round} 回合`;
     tacticalUi.modeLabel.textContent = tactical.battleMode === "online-team" ? "在线 2v2" : tactical.battleMode === "online" ? "在线 1v1" : tactical.battleMode === "team" ? "2v2 小队战" : tactical.battleMode === "trio" ? "1v2 围攻" : "1v1 战术";
     tacticalUi.phase.textContent = tactical.phase === "resolving" ? "结算阶段" : state.over ? "对局结束" : tactical.phase === "loadout" ? "配药阶段" : isPreparationRound() ? "预备移动" : tactical.phase === "movement" ? "移动阶段" : "出招阶段";
@@ -1738,11 +1755,190 @@
   }
   function makeFlameToken() { const flame = document.createElement("span"); flame.className = "flame-token"; flame.setAttribute("aria-hidden", "true"); return flame; }
   function makeUnitToken(fighter, side) {
-    const unit = document.createElement("span"); unit.className = `unit-token ${side}`; unit.title = `${getHeroDisplayName(fighter.hero)} ${formatHearts(Math.max(0, fighter.hp))}`;
+    const unit = document.createElement("span"); unit.className = `unit-token ${side}`; unit.dataset.fighterId = fighter.id; unit.title = `${getHeroDisplayName(fighter.hero)} ${formatHearts(Math.max(0, fighter.hp))}`;
     if (isFighterDefeated(fighter)) { unit.classList.add("is-out"); unit.textContent = "OUT"; return unit; }
     const source = fighter.heroId === "werewolf" && fighter.flags?.berserk ? HERO_AVATARS.werewolfBerserk : HERO_AVATARS[fighter.heroId];
     if (!source) { unit.textContent = side === "player" ? "你" : side === "enemy-b" ? "B" : "A"; return unit; }
     const image = document.createElement("img"); image.src = source; image.alt = ""; image.addEventListener("error", () => { image.remove(); unit.textContent = side === "player" ? "你" : side === "enemy-b" ? "B" : "A"; }, { once: true }); unit.append(image); return unit;
+  }
+
+  function getTacticalFxLayer() {
+    let layer = document.querySelector("#tacticalFxLayer");
+    if (layer) return layer;
+    layer = document.createElement("div");
+    layer.id = "tacticalFxLayer";
+    layer.className = "tactical-fx-layer";
+    layer.setAttribute("aria-hidden", "true");
+    document.body.append(layer);
+    return layer;
+  }
+
+  function clearTacticalFx() {
+    const layer = document.querySelector("#tacticalFxLayer");
+    if (layer) layer.textContent = "";
+    tacticalUi.map?.querySelectorAll(".fx-arriving, .fx-attacking, .fx-hit, .fx-guard, .fx-support")
+      .forEach((element) => element.classList.remove("fx-arriving", "fx-attacking", "fx-hit", "fx-guard", "fx-support"));
+  }
+
+  function getMapTileElement(position) {
+    if (!position || !tacticalUi.map) return null;
+    return tacticalUi.map.querySelector(`.map-tile[data-row="${position.row}"][data-col="${position.col}"]`);
+  }
+
+  function getMapUnitElement(fighter) {
+    if (!fighter?.id || !tacticalUi.map) return null;
+    return tacticalUi.map.querySelector(`.unit-token[data-fighter-id="${fighter.id}"]`);
+  }
+
+  function getElementCenter(element) {
+    if (!element) return null;
+    const rect = element.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, width: rect.width, height: rect.height };
+  }
+
+  function getTacticalFxDuration(ms) {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 1 : ms;
+  }
+
+  function waitForPaint() {
+    return new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+  }
+
+  function createTacticalFx(className, center, size = 36) {
+    if (!center) return null;
+    const effect = document.createElement("span");
+    effect.className = `tactical-fx ${className}`;
+    effect.style.left = `${center.x}px`;
+    effect.style.top = `${center.y}px`;
+    effect.style.width = `${size}px`;
+    effect.style.height = `${size}px`;
+    getTacticalFxLayer().append(effect);
+    return effect;
+  }
+
+  function getFxAvatarSource(fighter) {
+    return fighter?.heroId === "werewolf" && fighter.flags?.berserk ? HERO_AVATARS.werewolfBerserk : HERO_AVATARS[fighter?.heroId];
+  }
+
+  function addFxImpact(center, style = "guard", delay = 0) {
+    if (!center) return;
+    window.setTimeout(() => {
+      const effect = createTacticalFx(`tactical-fx-impact ${style}`, center, Math.max(42, Math.min(center.width || 54, center.height || 54)));
+      if (!effect) return;
+      const duration = getTacticalFxDuration(300);
+      const animation = effect.animate?.([{ opacity: 0, transform: "translate(-50%, -50%) scale(0.25)" }, { opacity: 1, transform: "translate(-50%, -50%) scale(1.1)", offset: 0.4 }, { opacity: 0, transform: "translate(-50%, -50%) scale(1.55)" }], { duration, easing: "steps(4, end)" });
+      if (animation?.finished) animation.finished.catch(() => {}).finally(() => effect.remove());
+      else window.setTimeout(() => effect.remove(), duration);
+    }, delay);
+  }
+
+  function getActionFxStyle(action) {
+    if (action?.kind === "defense") return "guard";
+    if (action?.tacticalFirebomb) return "fire";
+    if (action?.kind === "skill") return "skill";
+    return "attack";
+  }
+
+  function getActionFxTargets(entry) {
+    const action = entry.action || {};
+    if (Array.isArray(action.tacticalTargets) && action.tacticalTargets.length) return action.tacticalTargets.map(cloneTile);
+    if (Array.isArray(entry.plan?.target)) return entry.plan.target.map(cloneTile);
+    if (entry.plan?.target && typeof entry.plan.target.row === "number") return [cloneTile(entry.plan.target)];
+    const target = action.tacticalTarget || getFighterById(entry.plan?.targetId);
+    return target?.position ? [cloneTile(target.position)] : [];
+  }
+
+  function captureTacticalVisualSnapshot() {
+    return new Map(getAllTacticalFighters().map((fighter) => [fighter.id, { hp: fighter.hp, shield: fighter.flags?.puppetShield || 0 }]));
+  }
+
+  async function animateTacticalMovement(movement) {
+    if (!movement?.length) return;
+    clearTacticalFx();
+    renderTactical();
+    await waitForPaint();
+    const duration = getTacticalFxDuration(440);
+    const arrivingTokens = [];
+    const movingEffects = [];
+    for (const entry of movement) {
+      const start = getElementCenter(getMapTileElement(entry.start));
+      const end = getElementCenter(getMapTileElement(entry.end));
+      if (!start || !end) continue;
+      if (sameTile(entry.start, entry.end)) {
+        if (entry.conflict && entry.contestedTile) addFxImpact(getElementCenter(getMapTileElement(entry.contestedTile)), "clash");
+        continue;
+      }
+      const size = Math.max(30, Math.min(start.width, start.height) * 0.78);
+      const effect = createTacticalFx("tactical-fx-unit-move", start, size);
+      if (!effect) continue;
+      const source = getFxAvatarSource(entry.fighter);
+      if (source) {
+        const image = document.createElement("img"); image.src = source; image.alt = ""; effect.append(image);
+      } else effect.textContent = entry.fighter.label.slice(0, 1);
+      const destinationToken = getMapUnitElement(entry.fighter);
+      if (destinationToken) { destinationToken.classList.add("fx-arriving"); arrivingTokens.push(destinationToken); }
+      const deltaX = end.x - start.x;
+      const deltaY = end.y - start.y;
+      addFxImpact(start, "step");
+      window.setTimeout(() => addFxImpact(end, "land"), Math.max(1, duration - 110));
+      effect.animate([
+        { opacity: 0, transform: "translate(-50%, -50%) scale(0.72)" },
+        { opacity: 1, transform: "translate(-50%, -50%) scale(1.06)", offset: 0.16 },
+        { opacity: 1, transform: `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px)) scale(1)` },
+      ], { duration, easing: "steps(6, end)", fill: "forwards" });
+      movingEffects.push(effect);
+    }
+    await pause(duration + 70);
+    for (const token of arrivingTokens) token.classList.remove("fx-arriving");
+    for (const effect of movingEffects) effect.remove();
+  }
+
+  async function animateTacticalActions(entries, snapshot) {
+    if (!entries?.length) return;
+    clearTacticalFx();
+    await waitForPaint();
+    const duration = getTacticalFxDuration(420);
+    const effects = [];
+    for (const entry of entries) {
+      if (!entry?.fighter || !entry.action) continue;
+      const source = getElementCenter(getMapUnitElement(entry.fighter) || getMapTileElement(entry.fighter.position));
+      if (!source) continue;
+      const style = getActionFxStyle(entry.action);
+      const targets = getActionFxTargets(entry);
+      const sourceToken = getMapUnitElement(entry.fighter);
+      if (sourceToken) sourceToken.classList.add(style === "guard" ? "fx-guard" : "fx-attacking");
+      if (!targets.length) {
+        addFxImpact(source, style === "guard" ? "guard" : "charge", 30);
+        continue;
+      }
+      for (const targetPosition of targets) {
+        const target = getElementCenter(getMapTileElement(targetPosition));
+        if (!target) continue;
+        const projectile = createTacticalFx(`tactical-fx-projectile ${style}`, source, style === "fire" ? 28 : 24);
+        if (!projectile) continue;
+        const angle = Math.atan2(target.y - source.y, target.x - source.x) * 180 / Math.PI;
+        const deltaX = target.x - source.x;
+        const deltaY = target.y - source.y;
+        projectile.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+        projectile.animate([
+          { opacity: 0, transform: `translate(-50%, -50%) rotate(${angle}deg) scale(0.45)` },
+          { opacity: 1, transform: `translate(calc(-50% + ${deltaX * 0.55}px), calc(-50% + ${deltaY * 0.55}px)) rotate(${angle}deg) scale(1)` , offset: 0.55 },
+          { opacity: 0.25, transform: `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px)) rotate(${angle}deg) scale(0.8)` },
+        ], { duration, easing: "steps(6, end)", fill: "forwards" });
+        effects.push(projectile);
+        const fighterAtTarget = getFighterAt(targetPosition);
+        const before = fighterAtTarget ? snapshot?.get(fighterAtTarget.id) : null;
+        const damaged = Boolean(fighterAtTarget && before && (fighterAtTarget.hp < before.hp || (before.shield > (fighterAtTarget.flags?.puppetShield || 0))));
+        const impactStyle = style === "skill" && !damaged ? "support" : damaged ? "hit" : "guard";
+        const token = fighterAtTarget ? getMapUnitElement(fighterAtTarget) : null;
+        if (token) token.classList.add(damaged ? "fx-hit" : impactStyle === "support" ? "fx-support" : "fx-guard");
+        addFxImpact(target, impactStyle, Math.round(duration * 0.58));
+      }
+    }
+    await pause(duration + 80);
+    for (const effect of effects) effect.remove();
+    tacticalUi.map?.querySelectorAll(".fx-attacking, .fx-hit, .fx-guard, .fx-support").forEach((element) => element.classList.remove("fx-attacking", "fx-hit", "fx-guard", "fx-support"));
   }
 
   function getTargetableTiles() {
@@ -2461,6 +2657,7 @@
         scoringRules,
       });
       const online = { roomCode: data.code, playerId: data.playerId, slot: data.slot, initialized: false, pendingPlan: false, polling: false, appliedResults: new Set(), acknowledgedResults: new Set(), pollTimer: null, lastPhaseKey: "", teamMode: teamOnline };
+      tacticalMenuOpen = false;
       prepareTacticalOnlineWaitingRoom(online);
       tacticalUi.roomCode.value = data.code;
       setTacticalRoomStatus(`房间 ${data.code}：等待对手加入。把房间代码发给对方。`);
@@ -2486,6 +2683,7 @@
         pharmacistLoadout: getConfiguredPharmacistLoadout(),
       });
       const online = { roomCode: data.code, playerId: data.playerId, slot: data.slot, initialized: false, pendingPlan: false, polling: false, appliedResults: new Set(), acknowledgedResults: new Set(), pollTimer: null, lastPhaseKey: "", teamMode: teamOnline };
+      tacticalMenuOpen = false;
       prepareTacticalOnlineWaitingRoom(online);
       tacticalUi.roomCode.value = data.code;
       setTacticalRoomStatus(`已加入房间 ${data.code}，正在同步战场。`);
@@ -2652,8 +2850,10 @@
     if (state.over) return;
     const phaseKey = `${room.round}:${room.phase}`;
     if (online.lastPhaseKey !== phaseKey) {
+      const enteringNextRound = room.phase === "movement" && room.round > state.round;
       online.lastPhaseKey = phaseKey;
       state.round = room.round;
+      if (enteringNextRound) respawnTacticalFighters();
       pruneMovementTolls();
       state.tactical.phase = room.phase;
       state.tactical.selection = room.phase === "movement" ? "move" : "action";
@@ -2706,7 +2906,7 @@
       if (movement.some((entry) => entry.conflict)) addTacticalLog("移动发生冲突，相关单位留在原位。", "move");
       applyObjectiveEntryBonuses(movement);
       exposeNearbyNinjas();
-      await pause(150);
+      await animateTacticalMovement(movement);
     } else {
       const onlineTeam = isOnlineTeamBattle();
       const actionPlans = onlineTeam
@@ -2726,6 +2926,7 @@
       const visibilityLogs = [];
       exposeAttackingNinjas(resolvedActions, visibilityLogs);
       const defeatSnapshot = captureDefeatSnapshot();
+      const visualSnapshot = captureTacticalVisualSnapshot();
       const report = onlineTeam
         ? resolveTacticalSquadRound(
           resolvedActions.filter((entry) => getPlayerFighters().includes(entry.fighter)),
@@ -2736,9 +2937,10 @@
       applyTacticalFirebombs(resolvedActions, report);
       applyTacticalFlames(resolvedActions, report);
       exposeNearbyNinjas(report.logs, false);
-      if (onlineTeam) processTeamDefeats(defeatSnapshot, report);
+      processTacticalDefeats(defeatSnapshot, report);
       reconcileTacticalOutcome(report);
       for (const item of report.logs) addTacticalLog(item.text, item.kind || "");
+      await animateTacticalActions(resolvedActions, visualSnapshot);
       await animateCombat();
       if (!state.over) {
         applyMapResources();
@@ -2860,6 +3062,7 @@
       addTacticalLog(movement.map((entry) => `${entry.fighter.label}→${coordName(entry.end)}`).join("；"), "move");
       applyObjectiveEntryBonuses(movement);
       exposeNearbyNinjas();
+      await animateTacticalMovement(movement);
       if (wasPreparationRound) {
         state.round = 1;
         state.tactical.prepRound = false;
@@ -2924,6 +3127,7 @@
     const visibilityLogs = [];
     exposeAttackingNinjas(actionEntries, visibilityLogs);
     const defeatSnapshot = captureDefeatSnapshot();
+    const visualSnapshot = captureTacticalVisualSnapshot();
     const report = ["trio", "team"].includes(state.tactical.battleMode)
       ? resolveTacticalSquadRound(resolvedPlayerActions, resolvedEnemyActions)
       : resolveRound(resolvedPlayerActions[0].action, resolvedEnemyActions[0].action);
@@ -2931,9 +3135,10 @@
     applyTacticalFirebombs(actionEntries, report);
     applyTacticalFlames(actionEntries, report);
     exposeNearbyNinjas(report.logs, false);
-    if (isTeamBattle()) processTeamDefeats(defeatSnapshot, report);
+    processTacticalDefeats(defeatSnapshot, report);
     reconcileTacticalOutcome(report);
     for (const item of report.logs) addTacticalLog(item.text, item.kind || "");
+    await animateTacticalActions(actionEntries, visualSnapshot);
     await animateCombat();
     if (!state.over) {
       applyMapResources();
@@ -3060,23 +3265,11 @@
 
   function reconcileTacticalOutcome(report) {
     report.logs = report.logs.filter((item) => item.kind !== "win");
-    if (isTeamBattle()) {
-      state.over = state.tactical.playerScore >= scoringRules.victoryScore || state.tactical.enemyScore >= scoringRules.victoryScore;
-      if (!state.over) return;
-      const bothReached = state.tactical.playerScore >= scoringRules.victoryScore && state.tactical.enemyScore >= scoringRules.victoryScore;
-      const playerWon = state.tactical.playerScore >= scoringRules.victoryScore;
-      state.tactical.winReason = bothReached ? `双方同时达到 ${scoringRules.victoryScore} 分，小队战平局。` : playerWon ? `己方率先取得 ${scoringRules.victoryScore} 分，赢得小队战。` : `敌方率先取得 ${scoringRules.victoryScore} 分，赢得小队战。`;
-      report.logs.push({ kind: "win", text: state.tactical.winReason });
-      return;
-    }
-    const playerDefeated = isFighterDefeated(state.player);
-    const enemiesDefeated = getEnemyFighters().every(isFighterDefeated);
-    state.over = playerDefeated || enemiesDefeated;
+    state.over = state.tactical.playerScore >= scoringRules.victoryScore || state.tactical.enemyScore >= scoringRules.victoryScore;
     if (!state.over) return;
-
-    if (playerDefeated && enemiesDefeated) state.tactical.winReason = "双方阵营同时被击倒，平局。";
-    else if (enemiesDefeated) state.tactical.winReason = "敌方小队全部出局，你获得击倒胜利。";
-    else state.tactical.winReason = "你的 HP 归零，电脑小队获得击倒胜利。";
+    const bothReached = state.tactical.playerScore >= scoringRules.victoryScore && state.tactical.enemyScore >= scoringRules.victoryScore;
+    const playerWon = state.tactical.playerScore >= scoringRules.victoryScore;
+    state.tactical.winReason = bothReached ? `双方同时达到 ${scoringRules.victoryScore} 分，平局。` : playerWon ? `己方率先取得 ${scoringRules.victoryScore} 分，积分胜利。` : `敌方率先取得 ${scoringRules.victoryScore} 分，积分胜利。`;
     report.logs.push({ kind: "win", text: state.tactical.winReason });
   }
 
@@ -3084,7 +3277,7 @@
     return new Map(getAllTacticalFighters().map((fighter) => [fighter.id, !isFighterDefeated(fighter)]));
   }
 
-  function processTeamDefeats(snapshot, report) {
+  function processTacticalDefeats(snapshot, report) {
     for (const fighter of getAllTacticalFighters()) {
       if (!snapshot.get(fighter.id) || !isFighterDefeated(fighter) || fighter.flags?.tacticalRespawnRound) continue;
       const defeatedTeam = getFighterTeam(fighter);
@@ -3100,8 +3293,7 @@
     }
   }
 
-  function respawnTeamFighters() {
-    if (!isTeamBattle()) return;
+  function respawnTacticalFighters() {
     for (const fighter of getAllTacticalFighters()) {
       if (!fighter.flags?.tacticalRespawnRound || fighter.flags.tacticalRespawnRound > state.round) continue;
       const id = fighter.id;
@@ -3278,7 +3470,7 @@
 
   function completeTacticalRound() {
     state.round += 1;
-    respawnTeamFighters();
+    respawnTacticalFighters();
     state.tactical.phase = "movement"; state.tactical.selection = "move"; state.tactical.path = []; state.tactical.selectedCardId = null; state.tactical.battleMageImprint = false; clearActionTargets(); state.tactical.resolving = false; state.tactical.lastScore = false; state.tactical.standbyAutoPassScheduled = false; state.tactical.pendingEndChoice = null; state.tactical.endChoiceQueue = []; state.tactical.automaticEndChoices = []; state.tactical.lockedPlans = { movement: {}, action: {} };
     pruneMovementTolls();
     for (const fighter of getAllTacticalFighters()) fighter.movePoints = MOVE_POINTS;
@@ -3289,10 +3481,8 @@
   function finishTacticalMatch() {
     state.tactical.phase = "finished"; state.tactical.resolving = false; state.tactical.pendingEndChoice = null;
     if (!state.tactical.winReason) {
-      const enemiesDefeated = getEnemyFighters().every(isFighterDefeated);
-      if (isFighterDefeated(state.player) && enemiesDefeated) state.tactical.winReason = "双方阵营同时被击倒，平局。";
-      else if (enemiesDefeated) state.tactical.winReason = "敌方小队全部出局，你获得击倒胜利。";
-      else state.tactical.winReason = "你的 HP 归零，电脑小队获得击倒胜利。";
+      const bothReached = state.tactical.playerScore >= scoringRules.victoryScore && state.tactical.enemyScore >= scoringRules.victoryScore;
+      state.tactical.winReason = bothReached ? "双方同时达到获胜分数，平局。" : state.tactical.playerScore >= scoringRules.victoryScore ? "己方率先达到获胜分数，积分胜利。" : "敌方率先达到获胜分数，积分胜利。";
       addTacticalLog(state.tactical.winReason, "impact");
     }
     recordTacticalMatch(); renderTactical();
@@ -3300,11 +3490,10 @@
 
   function recordTacticalMatch() {
     if (state.matchRecorded) return;
-    const enemiesDefeated = getEnemyFighters().every(isFighterDefeated);
-    const result = isTeamBattle() ? (state.tactical.playerScore >= scoringRules.victoryScore && state.tactical.enemyScore >= scoringRules.victoryScore ? "draw" : state.tactical.playerScore >= scoringRules.victoryScore ? "win" : "loss") : isFighterDefeated(state.player) && enemiesDefeated ? "draw" : enemiesDefeated || state.tactical.playerScore >= scoringRules.victoryScore ? "win" : "loss";
+    const result = state.tactical.playerScore >= scoringRules.victoryScore && state.tactical.enemyScore >= scoringRules.victoryScore ? "draw" : state.tactical.playerScore >= scoringRules.victoryScore ? "win" : "loss";
     const mode = state.tactical.battleMode === "online-team" ? "tactical-online-2v2" : state.tactical.battleMode === "online" ? "tactical-online" : state.tactical.battleMode === "team" ? "tactical-2v2" : state.tactical.battleMode === "trio" ? "tactical-1v2" : "tactical-cpu";
     const modeLabel = state.tactical.battleMode === "online-team" ? "在线地图 2v2" : state.tactical.battleMode === "online" ? "在线地图 1v1" : state.tactical.battleMode === "team" ? "地图 2v2" : state.tactical.battleMode === "trio" ? "地图 1v2" : "地图 1v1";
-    const record = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, playerName: state.player.label, finishedAt: new Date().toISOString(), rounds: state.round, mode, modeLabel, playerHero: getPlayerFighters().map((fighter) => getHeroDisplayName(fighter.hero)).join(" + "), opponentHeroes: getEnemyFighters().map((fighter) => `${fighter.label}：${getHeroDisplayName(fighter.hero)}`), result, winReason: isTeamBattle() ? "score" : state.tactical.playerScore >= scoringRules.victoryScore || state.tactical.enemyScore >= scoringRules.victoryScore ? "objective" : "knockout" };
+    const record = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, playerName: state.player.label, finishedAt: new Date().toISOString(), rounds: state.round, mode, modeLabel, playerHero: getPlayerFighters().map((fighter) => getHeroDisplayName(fighter.hero)).join(" + "), opponentHeroes: getEnemyFighters().map((fighter) => `${fighter.label}：${getHeroDisplayName(fighter.hero)}`), result, winReason: "score" };
     writeMatchHistory([record, ...readMatchHistory()].slice(0, MAX_HISTORY_RECORDS)); state.matchRecorded = true;
   }
 
@@ -3362,13 +3551,72 @@
     return xp > 0 ? `${hp} 血，开局 ${xp} XP` : `${hp} 血`;
   }
 
+  function getMapSelectorSummary(entry) {
+    const map = entry.map;
+    return `${map.rows}×${map.cols} · 据点 ${coordName(map.objective)} · 能量 ${map.energyTiles.length} · 草丛 ${map.bushes.length} · 巨石 ${map.walls.length} · 薄墙 ${map.thinWalls.length}`;
+  }
+
+  function activateSelectedTacticalMap(entry, isDefault = false) {
+    if (isTacticalOnline()) {
+      tacticalUi.modalBody.textContent = "在线房间中的地图由房主同步，不能在对局中单独切换。";
+      return;
+    }
+    const map = sanitizeMapConfig(entry.map);
+    const spawns = sanitizeSpawnDraft(entry.spawns || getDefaultSpawnDraft(), map);
+    setActiveMapId(isDefault ? "" : entry.id);
+    writeStorage(TACTICAL_MAP_KEY, JSON.stringify(map));
+    persistSpawnDraft(spawns);
+    applyMapConfig(map);
+    initializeTacticalSetup();
+    applySpawnDraftToControls(spawns);
+    hideModal();
+    resetTacticalGame();
+    addTacticalLog(`已切换至地图「${entry.name}」。`, "score");
+  }
+
+  function showMapSelector() {
+    showModal("选择地图", (body) => {
+      const note = document.createElement("p");
+      note.textContent = mapEditor.active
+        ? "地图编辑器仍有未保存内容，请先保存地图或退出编辑后再切换。"
+        : isTacticalOnline()
+        ? "在线房间由房主同步地图；当前对局不能单独切换。"
+        : "选择后会立即按该地图及保存的出生点开始新对局。";
+      body.append(note);
+      if (mapEditor.active || isTacticalOnline()) return;
+
+      const grid = document.createElement("div");
+      grid.className = "map-selector-grid";
+      const defaultEntry = { id: "", name: "默认潮汐遗迹", map: cloneMapConfig(DEFAULT_TACTICAL_MAP), spawns: getDefaultSpawnDraft() };
+      const entries = [defaultEntry, ...readMapLibrary()];
+      const activeId = getActiveMapId();
+      for (const entry of entries) {
+        const choice = document.createElement("button");
+        choice.type = "button";
+        choice.className = "map-selector-card";
+        choice.classList.toggle("is-selected", entry.id === activeId || (!entry.id && !activeId));
+        const title = document.createElement("strong"); title.textContent = entry.name;
+        const meta = document.createElement("span"); meta.textContent = getMapSelectorSummary(entry);
+        const terrain = document.createElement("span"); terrain.className = "map-selector-terrain";
+        for (const type of ["objective", "energy", "bush", "wall"]) {
+          const marker = document.createElement("i"); marker.className = type; terrain.append(marker);
+        }
+        const action = document.createElement("em"); action.textContent = entry.id === activeId || (!entry.id && !activeId) ? "当前使用" : "选择此地图";
+        choice.append(title, meta, terrain, action);
+        choice.addEventListener("click", () => activateSelectedTacticalMap(entry, !entry.id));
+        grid.append(choice);
+      }
+      body.append(grid);
+    });
+  }
+
   function showManual() {
     showModal("战术原型说明", (body) => {
       appendSection(body, "基本流程", "开局第一回合前有一个预备回合，只能移动 1 格且不会出招。正式回合先锁定 1 格移动并同时结算；位置稳定后再选择行动卡，同时结算出招。普通攻击只能攻击武器距离内的敌方。移动阶段可用 WASD + Q/E 选择六个方向，Enter 锁定当前阶段。");
       appendSection(body, "地图资源", `能量点在回合结束时提供 1 XP。中央据点需要先占据一回合；下一回合仍守住且拥有 ${OBJECTIVE_SCORE_COST} XP 时，支付 ${OBJECTIVE_SCORE_COST} XP 获得 ${scoringRules.objectiveScore} 分并被刷新到外围位置。草丛外看不到草丛内的单位；草丛内可以看见外部，但两个草丛单位只有距离 1 时才互相可见。巨石无法进入；薄墙位于格子边缘，会阻挡移动路线与攻击距离，必须绕路计算。率先获得 ${scoringRules.victoryScore} 分获胜。`);
-      appendSection(body, "地图编辑器", "在对战设置中打开地图编辑器后，可直接点击地图设置双方出生点、据点、能量点、草丛、巨石和薄墙。出生点不能重合，也不能放在巨石、据点或能量点上；薄墙需要先点一个格子，再点相邻格子来切换两格之间的边。保存后地图和出生点都会记录在本地，并以新设置开始新对局。");
+      appendSection(body, "地图编辑器", "在对战设置中打开地图编辑器后，可直接点击地图设置双方出生点、据点、能量点、草丛、巨石和薄墙。出生点不能重合，也不能放在巨石、据点或能量点上；薄墙需要先点一个格子，再点相邻格子来切换两格之间的边。使用原名称保存会更新该地图；改名后保存会另存为新地图，原地图保留。保存后地图和出生点都会记录在本地，并以新设置开始新对局。");
       appendSection(body, "行动卡", "攻击分为短攻（距离 1）、长攻（距离 2）与锦囊。燃烧弹需要选择两个连续相邻格，各格立即受到小刀攻击，并在下回合留下火焰；站在火焰上且本回合防御低于 1 的角色会失去 1 HP，不分敌我。当前没有随机抽牌、牌库或卡组。技能会标注其目标要求；具体效果继续走旧版英雄规则。");
-      appendSection(body, "对战模式", `地图为 8×8 六边形战场。1v1 为单人对单个人机；1v2 中两个人机组成同一阵营；2v2 由你依次规划两名英雄，对战会协同集火与抢点的电脑小队。2v2 击倒英雄获得 ${scoringRules.killScore} 分，被击倒者下回合以出生血量和 1 XP 在出生点复活。在线 1v1 与在线 2v2 都可创建或加入房间；在线 2v2 每名真人各操控两名英雄。`);
+      appendSection(body, "对战模式", `地图为 8×8 六边形战场。1v1 为单人对单个人机；1v2 中两个人机组成同一阵营；2v2 由你依次规划两名英雄，对战会协同集火与抢点的电脑小队。所有模式中，击倒英雄获得 ${scoringRules.killScore} 分；被击倒者下回合以出生血量和 1 XP 在出生点复活。率先达到 ${scoringRules.victoryScore} 分获胜。在线 1v1 与在线 2v2 都可创建或加入房间；在线 2v2 每名真人各操控两名英雄。`);
       appendSection(body, "原型边界", "完整战斗日志会保留隐形单位的移动坐标，方便测试规则；在线房间为内存房间，服务重启后房间会失效。");
     });
   }
@@ -3376,7 +3624,7 @@
 
   function showScoringSettings() {
     showModal("计分规则", (body) => {
-      const note = document.createElement("p"); note.textContent = "修改后立即用于当前对局，并会记住到下次打开游戏。"; body.append(note);
+      const note = document.createElement("p"); note.textContent = "修改后立即用于当前对局；击杀、据点与获胜分数对 1v1、1v2、2v2 和在线模式均生效，并会记住到下次打开游戏。"; body.append(note);
       const form = document.createElement("div"); form.className = "scoring-settings-grid";
       const fields = [
         ["击杀得分", "killScore", scoringRules.killScore, 0],
@@ -3516,7 +3764,20 @@
     const name = normalizePlayerName(tacticalUi.playerName.value); tacticalUi.playerName.value = name;
     writeStorage(STORAGE_KEYS.playerName, name);
     writeStorage(STORAGE_KEYS.heroSelection, JSON.stringify({ playerHero: tacticalUi.playerHero.value, playerBHero: tacticalUi.playerBHero.value, enemyHero: tacticalUi.enemyHero.value, enemyBHero: tacticalUi.enemyBHero.value }));
+    tacticalMenuOpen = false;
     resetTacticalGame();
+  }
+
+  function openTacticalMenu() {
+    if (mapEditor.active) cancelMapEditor();
+    tacticalMenuOpen = true;
+    renderTactical();
+  }
+
+  function closeTacticalMenu() {
+    if (mapEditor.active) cancelMapEditor();
+    tacticalMenuOpen = false;
+    renderTactical();
   }
 
   function changeBattleMode(mode) {
@@ -3585,6 +3846,10 @@
     resetTacticalGame();
     if (isOnlineSetupMode()) setTacticalRoomStatus("已离开房间。可以创建新房间或输入代码加入。");
   });
+  tacticalUi.menuButton.addEventListener("click", openTacticalMenu);
+  tacticalUi.mapSelect.addEventListener("click", showMapSelector);
+  tacticalUi.menuClose.addEventListener("click", closeTacticalMenu);
+  tacticalUi.menuBackdrop.addEventListener("click", closeTacticalMenu);
   tacticalUi.applyHeroes.addEventListener("click", applyHeroChoices);
   tacticalUi.playerHero.addEventListener("change", handlePlayerHeroSelectionChanged);
   tacticalUi.expandLog.addEventListener("click", showFullTacticalLog);
@@ -3616,7 +3881,7 @@
   tacticalUi.mapEditorLibrary?.addEventListener("change", () => {
     const entry = getSelectedMapLibraryEntry();
     if (tacticalUi.mapEditorName) tacticalUi.mapEditorName.value = entry?.name || "";
-    mapEditor.mapId = entry?.id || "";
+    mapEditor.libraryId = entry?.id || "";
     renderMapEditor();
   });
   tacticalUi.mapEditorLoad?.addEventListener("click", loadSelectedMapFromLibrary);
@@ -3626,7 +3891,11 @@
   tacticalUi.mapEditorCancel.addEventListener("click", cancelMapEditor);
   tacticalUi.modalClose.addEventListener("click", hideModal);
   tacticalUi.modal.addEventListener("click", (event) => { if (event.target === tacticalUi.modal) hideModal(); });
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hideModal(); });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (!tacticalUi.modal.hidden) hideModal();
+    else if (tacticalMenuOpen) closeTacticalMenu();
+  });
   document.addEventListener("keydown", handleTacticalKeyboard);
 
   window.__JI_DEBUG__ = {
