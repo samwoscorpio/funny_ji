@@ -650,6 +650,8 @@ h2 {
 
 .tactical-shell.is-map-editing .map-tile {
   cursor: crosshair;
+  pointer-events: auto !important;
+  touch-action: manipulation;
 }
 
 .map-tile.editor-tile::before {
@@ -1765,6 +1767,20 @@ h2 {
 .spawn-settings label {
   grid-template-columns: auto minmax(86px, 1fr);
   align-items: center;
+}
+
+.spawn-coordinate-input {
+  min-width: 0;
+  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.spawn-coordinate-input.is-invalid {
+  color: #ffd0c7;
+  border-color: #d95743;
+  box-shadow: inset 0 0 0 1px rgba(217, 87, 67, 0.45);
 }
 
 .spawn-settings button,
@@ -3040,10 +3056,60 @@ h2 {
   pointer-events: none;
 }
 
+.spawn-point-stack {
+  position: absolute;
+  z-index: 8;
+  inset: 17% 8%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  pointer-events: none;
+}
+
+.spawn-point-stack .spawn-point-marker {
+  position: static;
+  inset: auto;
+  min-width: 0;
+  min-height: 0;
+  font-size: clamp(6px, 0.55vw, 8px);
+}
+
+.spawn-point-marker.is-active {
+  background: rgba(82, 61, 16, 0.96);
+  box-shadow: inset 0 0 12px #000, 0 0 0 2px #f5d05f, 0 0 16px currentColor;
+}
+
 .spawn-point-marker.player-a { color: #67c7ff; }
 .spawn-point-marker.player-b { color: #76d7b8; }
 .spawn-point-marker.enemy-a { color: #f06a50; background-color: rgba(57, 19, 14, 0.9); }
 .spawn-point-marker.enemy-b { color: #e6a04c; background-color: rgba(57, 34, 12, 0.9); }
+
+.map-editor-spawn-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid rgba(186, 139, 61, 0.45);
+  background: rgba(10, 9, 7, 0.72);
+}
+
+.map-editor-spawn-chip {
+  min-height: 26px;
+  padding: 4px 8px;
+  border-color: currentColor;
+  color: #c9d1c0;
+  background: rgba(25, 23, 17, 0.9);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.map-editor-spawn-chip.player-a { color: #76cdf7; }
+.map-editor-spawn-chip.player-b { color: #81dcb9; }
+.map-editor-spawn-chip.enemy-a { color: #f17e67; }
+.map-editor-spawn-chip.enemy-b { color: #edb05e; }
+.map-editor-spawn-chip[aria-pressed="true"] { box-shadow: inset 0 0 0 1px #120b05, 0 0 0 1px #f5d05f, 0 0 12px rgba(245, 208, 95, 0.38); background: rgba(82, 61, 16, 0.96); }
 
 .tactical-cards,
 .tactical-cards.has-many-actions {

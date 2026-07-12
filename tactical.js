@@ -65,11 +65,12 @@
     lock: document.querySelector("#tacticalLockBtn"), cancel: document.querySelector("#tacticalCancelBtn"), reset: document.querySelector("#tacticalResetBtn"),
     applyHeroes: document.querySelector("#tacticalApplyHeroes"), playerHero: document.querySelector("#tacticalPlayerHero"), playerBHero: document.querySelector("#tacticalPlayerBHero"), enemyHero: document.querySelector("#tacticalEnemyHero"), enemyBHero: document.querySelector("#tacticalEnemyBHero"), playerName: document.querySelector("#tacticalPlayerName"),
     duelMode: document.querySelector("#tacticalDuelMode"), trioMode: document.querySelector("#tacticalTrioMode"), teamMode: document.querySelector("#tacticalTeamMode"), onlineMode: document.querySelector("#tacticalOnlineMode"), onlineTeamMode: document.querySelector("#tacticalOnlineTeamMode"), playerBSettings: document.querySelectorAll(".player-b-setting"), enemyBSettings: document.querySelectorAll(".enemy-b-setting"),
-    playerSpawn: document.querySelector("#tacticalPlayerSpawn"), playerBSpawn: document.querySelector("#tacticalPlayerBSpawn"), enemySpawn: document.querySelector("#tacticalEnemySpawn"), enemyBSpawn: document.querySelector("#tacticalEnemyBSpawn"), defaultSpawns: document.querySelector("#tacticalDefaultSpawns"),
+    playerSpawn: document.querySelector("#tacticalPlayerSpawn"), playerBSpawn: document.querySelector("#tacticalPlayerBSpawn"), enemySpawn: document.querySelector("#tacticalEnemySpawn"), enemyBSpawn: document.querySelector("#tacticalEnemyBSpawn"),
+    playerSpawnInput: document.querySelector("#tacticalPlayerSpawnInput"), playerBSpawnInput: document.querySelector("#tacticalPlayerBSpawnInput"), enemySpawnInput: document.querySelector("#tacticalEnemySpawnInput"), enemyBSpawnInput: document.querySelector("#tacticalEnemyBSpawnInput"), defaultSpawns: document.querySelector("#tacticalDefaultSpawns"),
     spawnSettings: document.querySelector("#tacticalSpawnSettings"), roomSettings: document.querySelector("#tacticalRoomSettings"), createRoom: document.querySelector("#tacticalCreateRoom"), joinRoom: document.querySelector("#tacticalJoinRoom"), roomCode: document.querySelector("#tacticalRoomCode"), roomStatus: document.querySelector("#tacticalRoomStatus"),
     mapEditorToggle: document.querySelector("#tacticalMapEditorBtn"), mapEditorPanel: document.querySelector("#tacticalMapEditor"), mapEditorTools: document.querySelector("#mapEditorTools"), mapEditorHint: document.querySelector("#mapEditorHint"),
     mapEditorName: document.querySelector("#mapEditorName"), mapEditorLibrary: document.querySelector("#mapEditorLibrary"), mapEditorLoad: document.querySelector("#mapEditorLoad"), mapEditorDelete: document.querySelector("#mapEditorDelete"),
-    mapEditorSave: document.querySelector("#mapEditorSave"), mapEditorReset: document.querySelector("#mapEditorReset"), mapEditorCancel: document.querySelector("#mapEditorCancel"),
+    mapEditorSave: document.querySelector("#mapEditorSave"), mapEditorReset: document.querySelector("#mapEditorReset"), mapEditorCancel: document.querySelector("#mapEditorCancel"), mapEditorSpawnStatus: document.querySelector("#mapEditorSpawnStatus"),
     log: document.querySelector("#tacticalLog"), expandLog: document.querySelector("#tacticalExpandLog"), clearLog: document.querySelector("#tacticalClearLog"),
     actionTitle: document.querySelector(".action-dock h2"),
     scoring: document.querySelector("#tacticalScoringBtn"), manual: document.querySelector("#tacticalManualBtn"), history: document.querySelector("#tacticalHistoryBtn"),
@@ -90,6 +91,8 @@
     spawns: null,
     mapId: null,
     notice: "",
+    lastPointerKey: "",
+    lastPointerAt: 0,
   };
 
   state.tactical = {
@@ -245,13 +248,16 @@
       if (!Array.isArray(saved)) return [];
       return saved
         .filter((entry) => entry && entry.id && entry.map)
-        .map((entry) => ({
-          id: String(entry.id),
-          name: normalizeMapName(entry.name),
-          map: sanitizeMapConfig(entry.map),
-          spawns: entry.spawns || null,
-          updatedAt: entry.updatedAt || "",
-        }));
+        .map((entry) => {
+          const map = sanitizeMapConfig(entry.map);
+          return {
+            id: String(entry.id),
+            name: normalizeMapName(entry.name),
+            map,
+            spawns: entry.spawns ? sanitizeSpawnDraft(entry.spawns, map) : null,
+            updatedAt: entry.updatedAt || "",
+          };
+        });
     } catch (_) {
       return [];
     }
@@ -537,6 +543,7 @@
     setSpawnSelectValue(tacticalUi.playerBSpawn, saved.playerBSpawn, DEFAULT_SPAWNS[setupBattleMode].playerB || DEFAULT_SPAWNS.team.playerB);
     setSpawnSelectValue(tacticalUi.enemySpawn, saved.enemySpawn, DEFAULT_SPAWNS[setupBattleMode].enemy);
     setSpawnSelectValue(tacticalUi.enemyBSpawn, saved.enemyBSpawn, DEFAULT_SPAWNS[setupBattleMode].enemyB);
+    applySpawnDraftToControls(sanitizeSpawnDraft(getSpawnDraftFromControls(), TACTICAL_MAP));
     syncBattleModeControls();
   }
 
@@ -561,11 +568,7 @@
   }
 
   function applyDefaultSpawns() {
-    const defaults = DEFAULT_SPAWNS[setupBattleMode];
-    tacticalUi.playerSpawn.value = `${defaults.player.row},${defaults.player.col}`;
-    tacticalUi.playerBSpawn.value = `${(defaults.playerB || DEFAULT_SPAWNS.team.playerB).row},${(defaults.playerB || DEFAULT_SPAWNS.team.playerB).col}`;
-    tacticalUi.enemySpawn.value = `${defaults.enemy.row},${defaults.enemy.col}`;
-    tacticalUi.enemyBSpawn.value = `${defaults.enemyB.row},${defaults.enemyB.col}`;
+    applySpawnDraftToControls(getDefaultSpawnDraft());
   }
 
   function getSpawnDraftFromControls() {
@@ -596,10 +599,10 @@
 
   function getSpawnToolConfig(tool) {
     return ({
-      "spawn-player": { key: "player", label: "我方 A", tone: "player-a" },
-      "spawn-player-b": { key: "playerB", label: "我方 B", tone: "player-b" },
-      "spawn-enemy": { key: "enemy", label: "敌方 A", tone: "enemy-a" },
-      "spawn-enemy-b": { key: "enemyB", label: "敌方 B", tone: "enemy-b" },
+      "spawn-player": { key: "player", label: "我方 A", shortLabel: "我A", tone: "player-a" },
+      "spawn-player-b": { key: "playerB", label: "我方 B", shortLabel: "我B", tone: "player-b" },
+      "spawn-enemy": { key: "enemy", label: "敌方 A", shortLabel: "敌A", tone: "enemy-a" },
+      "spawn-enemy-b": { key: "enemyB", label: "敌方 B", shortLabel: "敌B", tone: "enemy-b" },
     })[tool] || null;
   }
 
@@ -607,10 +610,89 @@
 
   function applySpawnDraftToControls(spawns) {
     if (!spawns) return;
-    tacticalUi.playerSpawn.value = keyOf(spawns.player);
-    tacticalUi.playerBSpawn.value = keyOf(spawns.playerB);
-    tacticalUi.enemySpawn.value = keyOf(spawns.enemy);
-    tacticalUi.enemyBSpawn.value = keyOf(spawns.enemyB);
+    setSpawnControlPosition(tacticalUi.playerSpawn, spawns.player);
+    setSpawnControlPosition(tacticalUi.playerBSpawn, spawns.playerB);
+    setSpawnControlPosition(tacticalUi.enemySpawn, spawns.enemy);
+    setSpawnControlPosition(tacticalUi.enemyBSpawn, spawns.enemyB);
+    syncManualSpawnInputs(spawns);
+  }
+
+  function setSpawnControlPosition(select, position) {
+    if (!select || !position) return;
+    const value = keyOf(position);
+    if (![...select.options].some((option) => option.value === value)) {
+      select.add(new Option(`${coordName(position)} · 自定义出生点`, value));
+    }
+    select.value = value;
+  }
+
+  function getSpawnInputConfig(input) {
+    return [
+      [tacticalUi.playerSpawnInput, "player", "玩家 A"],
+      [tacticalUi.playerBSpawnInput, "playerB", "玩家 B"],
+      [tacticalUi.enemySpawnInput, "enemy", "电脑 A"],
+      [tacticalUi.enemyBSpawnInput, "enemyB", "电脑 B"],
+    ].find(([element]) => element === input) || null;
+  }
+
+  function getSpawnInputForKey(key) {
+    return ({ player: tacticalUi.playerSpawnInput, playerB: tacticalUi.playerBSpawnInput, enemy: tacticalUi.enemySpawnInput, enemyB: tacticalUi.enemyBSpawnInput })[key] || null;
+  }
+
+  function syncManualSpawnInputs(spawns) {
+    for (const key of ["player", "playerB", "enemy", "enemyB"]) {
+      const input = getSpawnInputForKey(key);
+      if (!input || !spawns?.[key]) continue;
+      input.value = coordName(spawns[key]);
+      input.setCustomValidity("");
+      input.classList.remove("is-invalid");
+    }
+  }
+
+  function parseSpawnCoordinate(value, map = TACTICAL_MAP) {
+    const match = String(value || "").trim().toUpperCase().match(/^([A-H])\s*([1-8])$/);
+    if (!match) return null;
+    const position = { row: ROW_LABELS.indexOf(match[1]), col: Number(match[2]) - 1 };
+    return inBounds(position, map) ? position : null;
+  }
+
+  function updateManualSpawnInput(input) {
+    const config = getSpawnInputConfig(input);
+    if (!config) return;
+    const [_, key, label] = config;
+    const map = mapEditor.active && mapEditor.draft ? mapEditor.draft : TACTICAL_MAP;
+    const position = parseSpawnCoordinate(input.value, map);
+    const current = mapEditor.active && mapEditor.spawns ? mapEditor.spawns : getSpawnDraftFromControls();
+    const invalid = !position || isWall(position, map) || sameTile(position, map.objective) || containsTile(map.energyTiles, position);
+    const occupied = !invalid && getActiveSpawnKeys().some((otherKey) => otherKey !== key && sameTile(current[otherKey], position));
+    if (invalid || occupied) {
+      const reason = invalid ? "请输入可站立的格子，例如 C4；不能使用巨石、据点或能量点。" : "该格已有另一名角色的出生点。";
+      input.setCustomValidity(reason);
+      input.classList.add("is-invalid");
+      if (mapEditor.active) {
+        mapEditor.notice = `${label}出生点未修改：${reason}`;
+        renderTactical();
+      }
+      return;
+    }
+    current[key] = cloneTile(position);
+    input.value = coordName(position);
+    input.setCustomValidity("");
+    input.classList.remove("is-invalid");
+    if (mapEditor.active) {
+      mapEditor.spawns = current;
+      mapEditor.notice = `${label}出生点已设置在 ${coordName(position)}。`;
+      renderTactical();
+      return;
+    }
+    applySpawnDraftToControls(current);
+    persistSpawnDraft(sanitizeSpawnDraft(current, map));
+  }
+
+  function handleManualSpawnInput(event) {
+    if (event.type === "keydown" && event.key !== "Enter") return;
+    if (event.type === "keydown") event.preventDefault();
+    updateManualSpawnInput(event.currentTarget);
   }
 
   function persistSpawnDraft(spawns) {
@@ -631,7 +713,7 @@
     tacticalUi.onlineTeamMode?.setAttribute("aria-pressed", String(setupBattleMode === "online-team"));
     for (const field of tacticalUi.playerBSettings) field.hidden = !["team", "online-team"].includes(setupBattleMode);
     for (const field of tacticalUi.enemyBSettings) field.hidden = !["trio", "team"].includes(setupBattleMode);
-    tacticalUi.spawnSettings.hidden = true;
+    tacticalUi.spawnSettings.hidden = false;
     tacticalUi.roomSettings.hidden = !isOnlineSetupMode();
     tacticalUi.applyHeroes.hidden = isOnlineSetupMode();
   }
@@ -648,6 +730,23 @@
       button.setAttribute("aria-pressed", String(button.dataset.mapTool === mapEditor.tool));
     }
     tacticalUi.mapEditorHint.textContent = mapEditor.notice || getMapEditorInstruction();
+    renderMapEditorSpawnStatus();
+  }
+
+  function renderMapEditorSpawnStatus() {
+    if (!tacticalUi.mapEditorSpawnStatus) return;
+    tacticalUi.mapEditorSpawnStatus.textContent = "";
+    const labels = { player: "我方 A", playerB: "我方 B", enemy: "敌方 A", enemyB: "敌方 B" };
+    for (const key of getActiveSpawnKeys()) {
+      const tool = ({ player: "spawn-player", playerB: "spawn-player-b", enemy: "spawn-enemy", enemyB: "spawn-enemy-b" })[key];
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = `map-editor-spawn-chip ${getSpawnToolConfig(tool).tone}`;
+      chip.dataset.mapSpawnTool = tool;
+      chip.setAttribute("aria-pressed", String(mapEditor.tool === tool));
+      chip.textContent = `${labels[key]}：${coordName(mapEditor.spawns?.[key])}`;
+      tacticalUi.mapEditorSpawnStatus.append(chip);
+    }
   }
 
   function getMapEditorInstruction() {
@@ -675,8 +774,11 @@
     mapEditor.active = true;
     mapEditor.tool = mapEditor.tool || "objective";
     mapEditor.anchor = null;
+    mapEditor.lastPointerKey = "";
+    mapEditor.lastPointerAt = 0;
     mapEditor.draft = cloneMapConfig(activeMapConfig);
-    mapEditor.spawns = getSpawnDraftFromControls();
+    mapEditor.spawns = sanitizeSpawnDraft(getSpawnDraftFromControls(), mapEditor.draft);
+    applySpawnDraftToControls(mapEditor.spawns);
     const activeEntry = getActiveMapEntry();
     mapEditor.mapId = activeEntry?.id || "";
     if (tacticalUi.mapEditorName) tacticalUi.mapEditorName.value = activeEntry?.name || "";
@@ -692,6 +794,8 @@
     mapEditor.spawns = null;
     mapEditor.mapId = null;
     mapEditor.notice = "";
+    mapEditor.lastPointerKey = "";
+    mapEditor.lastPointerAt = 0;
     hideTileTooltip();
     renderTactical();
   }
@@ -715,15 +819,15 @@
     writeStorage(TACTICAL_MAP_KEY, JSON.stringify(next));
     persistSpawnDraft(spawns);
     applyMapConfig(next);
+    applySpawnDraftToControls(spawns);
     mapEditor.active = false;
     mapEditor.anchor = null;
     mapEditor.draft = null;
     mapEditor.spawns = null;
     mapEditor.mapId = entry.id;
     mapEditor.notice = "";
-    mapEditor.spawns = null;
-    mapEditor.notice = "";
     initializeTacticalSetup();
+    applySpawnDraftToControls(spawns);
     resetTacticalGame();
     addTacticalLog(`地图「${entry.name}」已保存并启用。`, "score");
     renderTactical();
@@ -764,10 +868,26 @@
     renderTactical();
   }
 
-  function handleMapEditorTileClick(position) {
+  function setMapEditorSpawnTool(event) {
+    const button = event.target.closest("[data-map-spawn-tool]");
+    if (!button) return;
+    mapEditor.tool = button.dataset.mapSpawnTool;
+    mapEditor.anchor = null;
+    mapEditor.notice = `已选择${getSpawnToolConfig(mapEditor.tool).label}出生点；点击地图中的可站立格放置。`;
+    renderTactical();
+  }
+
+  function handleMapEditorTileClick(position, source = "click") {
     if (!mapEditor.active || !mapEditor.draft) return;
     const draft = mapEditor.draft;
     if (!inBounds(position, draft)) return;
+    const now = Date.now();
+    const positionKey = keyOf(position);
+    if (source === "click" && mapEditor.lastPointerKey === positionKey && now - mapEditor.lastPointerAt < 700) return;
+    if (source === "pointer") {
+      mapEditor.lastPointerKey = positionKey;
+      mapEditor.lastPointerAt = now;
+    }
     if (isSpawnTool()) {
       setDraftSpawn(position, draft);
       renderTactical();
@@ -1504,7 +1624,8 @@
         appendThinWallEdges(tile, position, map);
         if (getActiveFlame(position)) { tile.classList.add("flame"); tile.append(makeFlameToken()); }
         if (mapEditor.active) {
-          for (const marker of getSpawnMarkersAt(position)) tile.append(makeSpawnMarker(marker));
+          const spawnMarkers = getSpawnMarkersAt(position);
+          if (spawnMarkers.length) tile.append(makeSpawnMarkerStack(spawnMarkers));
         } else {
           for (const player of getPlayerFighters()) if (sameTile(position, player.position) && !player.flags?.tacticalRespawnRound) tile.append(makeUnitToken(player, player.id === "p2" ? "player-b" : "player"));
           if (sameTile(position, state.enemy.position) && isFighterVisibleToTeam(state.enemy, "player")) tile.append(makeUnitToken(state.enemy, "enemy"));
@@ -1532,9 +1653,19 @@
   function makeSpawnMarker(marker) {
     const token = document.createElement("span");
     token.className = `spawn-point-marker ${marker.tone}`;
-    token.textContent = marker.label;
+    token.classList.toggle("is-active", marker.key === getSpawnToolConfig()?.key);
+    token.textContent = marker.shortLabel || marker.label;
     token.title = `${marker.label}出生点`;
     return token;
+  }
+
+  function makeSpawnMarkerStack(markers) {
+    if (markers.length === 1) return makeSpawnMarker(markers[0]);
+    const stack = document.createElement("span");
+    stack.className = "spawn-point-stack";
+    stack.title = markers.map((marker) => `${marker.label}出生点`).join(" / ");
+    for (const marker of markers) stack.append(makeSpawnMarker(marker));
+    return stack;
   }
 
   function describeTerrain(position, map = TACTICAL_MAP) {
@@ -1798,7 +1929,7 @@
       const entries = [
         ["模式", "地图编辑"],
         ["工具", getMapEditorToolName()],
-        ["出生点", getActiveSpawnKeys().map((key) => coordName(mapEditor.spawns?.[key])).join(" / ")],
+        ["出生点", formatSpawnDraftSummary()],
         ["薄墙", `${mapEditor.draft?.thinWalls?.length || 0} 条`],
         ["状态", "保存后会用新地图开始新对局"],
       ];
@@ -1852,6 +1983,14 @@
       erase: "擦除",
     })[mapEditor.tool] || "地图";
   }
+
+  function formatSpawnDraftSummary(spawns = mapEditor.spawns) {
+    const labels = { player: "我A", playerB: "我B", enemy: "敌A", enemyB: "敌B" };
+    return getActiveSpawnKeys()
+      .map((key) => `${labels[key]} ${coordName(spawns?.[key])}`)
+      .join(" / ");
+  }
+
   function validateMovementPlan() {
     if (state.over) return { ok: false, reason: "对局已结束" };
     if (isPharmacistLoadoutPhase()) return { ok: false, reason: "请先完成配药" };
@@ -1903,6 +2042,14 @@
     }
     if (state.tactical.phase === "movement") editPlayerPath(position);
     renderTactical();
+  }
+
+  function handleMapEditorPointerDown(event) {
+    if (!mapEditor.active || (event.button !== 0 && event.pointerType !== "touch")) return;
+    const tile = event.target.closest(".map-tile");
+    if (!tile) return;
+    event.preventDefault();
+    handleMapEditorTileClick({ row: Number(tile.dataset.row), col: Number(tile.dataset.col) }, "pointer");
   }
 
   function handleEnemyOverviewClick(event) {
@@ -3361,6 +3508,11 @@
   }
 
   function applyHeroChoices() {
+    if (mapEditor.active) {
+      mapEditor.notice = "地图仍在编辑中：请先点击“保存地图”提交出生点和地形，或退出编辑放弃本次修改。";
+      renderTactical();
+      return;
+    }
     const name = normalizePlayerName(tacticalUi.playerName.value); tacticalUi.playerName.value = name;
     writeStorage(STORAGE_KEYS.playerName, name);
     writeStorage(STORAGE_KEYS.heroSelection, JSON.stringify({ playerHero: tacticalUi.playerHero.value, playerBHero: tacticalUi.playerBHero.value, enemyHero: tacticalUi.enemyHero.value, enemyBHero: tacticalUi.enemyBHero.value }));
@@ -3420,6 +3572,7 @@
     renderTactical();
   }
 
+  tacticalUi.map.addEventListener("pointerdown", handleMapEditorPointerDown, true);
   tacticalUi.map.addEventListener("click", handleMapClick);
   tacticalUi.playerOverview.addEventListener("click", handlePlayerOverviewClick);
   tacticalUi.enemyOverview.addEventListener("click", handleEnemyOverviewClick);
@@ -3453,8 +3606,13 @@
   tacticalUi.createRoom.addEventListener("click", createTacticalOnlineRoom);
   tacticalUi.joinRoom.addEventListener("click", joinTacticalOnlineRoom);
   tacticalUi.defaultSpawns.addEventListener("click", applyDefaultSpawns);
+  for (const input of [tacticalUi.playerSpawnInput, tacticalUi.playerBSpawnInput, tacticalUi.enemySpawnInput, tacticalUi.enemyBSpawnInput]) {
+    input?.addEventListener("change", handleManualSpawnInput);
+    input?.addEventListener("keydown", handleManualSpawnInput);
+  }
   tacticalUi.mapEditorToggle.addEventListener("click", () => { if (mapEditor.active) cancelMapEditor(); else openMapEditor(); });
   tacticalUi.mapEditorTools.addEventListener("click", setMapEditorTool);
+  tacticalUi.mapEditorSpawnStatus?.addEventListener("click", setMapEditorSpawnTool);
   tacticalUi.mapEditorLibrary?.addEventListener("change", () => {
     const entry = getSelectedMapLibraryEntry();
     if (tacticalUi.mapEditorName) tacticalUi.mapEditorName.value = entry?.name || "";

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Projekt Ji - 战术原型</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=spawn-editor-20260712-2" />
   </head>
   <body>
     <main id="tacticalShell" class="tactical-shell" data-phase="movement">
@@ -121,10 +121,10 @@
         <label class="enemy-b-setting" hidden>电脑 B<select id="tacticalEnemyBHero"></select></label>
         <div id="tacticalSpawnSettings" class="spawn-settings" aria-label="出生点设置" hidden>
           <span>出生点</span>
-          <label>玩家 A<select id="tacticalPlayerSpawn"></select></label>
-          <label class="player-b-setting" hidden>玩家 B<select id="tacticalPlayerBSpawn"></select></label>
-          <label>电脑 A<select id="tacticalEnemySpawn"></select></label>
-          <label class="enemy-b-setting" hidden>电脑 B<select id="tacticalEnemyBSpawn"></select></label>
+          <label>玩家 A<input id="tacticalPlayerSpawnInput" class="spawn-coordinate-input" maxlength="2" inputmode="text" autocomplete="off" placeholder="C4" aria-label="玩家 A 出生点，例如 C4" /><select id="tacticalPlayerSpawn" hidden></select></label>
+          <label class="player-b-setting" hidden>玩家 B<input id="tacticalPlayerBSpawnInput" class="spawn-coordinate-input" maxlength="2" inputmode="text" autocomplete="off" placeholder="E3" aria-label="玩家 B 出生点，例如 E3" /><select id="tacticalPlayerBSpawn" hidden></select></label>
+          <label>电脑 A<input id="tacticalEnemySpawnInput" class="spawn-coordinate-input" maxlength="2" inputmode="text" autocomplete="off" placeholder="B2" aria-label="电脑 A 出生点，例如 B2" /><select id="tacticalEnemySpawn" hidden></select></label>
+          <label class="enemy-b-setting" hidden>电脑 B<input id="tacticalEnemyBSpawnInput" class="spawn-coordinate-input" maxlength="2" inputmode="text" autocomplete="off" placeholder="B7" aria-label="电脑 B 出生点，例如 B7" /><select id="tacticalEnemyBSpawn" hidden></select></label>
           <button id="tacticalDefaultSpawns" type="button" title="恢复当前模式默认出生点">默认</button>
         </div>
         <button id="tacticalMapEditorBtn" type="button" aria-pressed="false">地图编辑器</button>
@@ -151,6 +151,7 @@
             <button type="button" data-map-tool="thin-wall" aria-pressed="false">薄墙</button>
             <button type="button" data-map-tool="erase" aria-pressed="false">擦除</button>
           </div>
+          <div id="mapEditorSpawnStatus" class="map-editor-spawn-status" aria-live="polite"></div>
           <div class="map-editor-actions">
             <button id="mapEditorSave" type="button">保存地图</button>
             <button id="mapEditorReset" type="button">恢复默认</button>
@@ -177,7 +178,7 @@
     </div>
 
     <script>window.__JI_TACTICAL_REBUILD__ = true;</script>
-    <script src="./game.js"></script>
-    <script src="./tactical.js"></script>
+    <script src="./game.js?v=spawn-editor-20260712-2"></script>
+    <script src="./tactical.js?v=spawn-editor-20260712-2"></script>
   </body>
 </html>
