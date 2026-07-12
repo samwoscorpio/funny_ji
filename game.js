@@ -99,7 +99,7 @@ const BALANCE = {
       shurikenPower: 3,
       blindTurns: 2,
       stealthCost: 2,
-      stealthTurns: 4,
+      stealthTurns: 3,
     },
     puppet: {
       maxHp: 2,
@@ -115,6 +115,24 @@ const BALANCE = {
       maxHp: 4,
       xpPerDamageTaken: 1,
       tauntTurns: 1,
+    },
+    battleMage: {
+      maxHp: 3,
+      jiXpGain: 1,
+    },
+    gunner: {
+      maxHp: 2,
+      jiXpGain: 1,
+      spellLearnCost: 1,
+      cannonCost: 10,
+      cannonPower: 8,
+      cannonRange: 2,
+      cannonDamage: 2,
+      machineGunCost: 12,
+      machineGunPower: 10,
+      machineGunRange: 2,
+      machineGunDamage: 1,
+      machineGunTurns: 2,
     },
     assassin: {
       maxHp: 1,
@@ -259,6 +277,8 @@ const HERO_LORE = {
   puppet: "木偶的线并不通向天花板，而是垂入舞台下方的深井。它倒下时，井底会有另一双手慢慢把线重新系紧。",
   pharmacist: "药师的药柜里没有标签，只有潮湿的星图。瓶中液体偶尔会自己转向，仿佛深渊里的病人正隔着玻璃呼吸。",
   paladin: "圣骑士的盾牌来自一艘沉没圣船的舱门。每当敌意落在他身上，门后便传来潮湿的圣歌，催促所有刀锋转向同一个名字。",
+  battleMage: "战法把火焰写成会回头的符号。每一次命中，烈焰炫纹都会从敌人的伤口里折返，像一枚枚重新归队的赤色星环。",
+  gunner: "枪炮师拆开过太多敌人的法术残响。那些偷来的弹道被锁进炮台，等下一次雷声响起时，连施法者也认不出自己的火力。",
   battery: "聚气师把每一次呼吸都存进铜制罗盘。罗盘指针从不指北，只指向下一次即将被夺走的机会。",
   balancedBot: "平衡bot来自一间无人承认存在的实验室。它的算法追求公平，直到公平本身开始长出眼睛。",
   woodendummy: "wood原本只是练功桩，直到某夜潮水漫进武馆。现在每一道木纹都像闭合的嘴，等待有人再拍一下 Ji。",
@@ -308,6 +328,61 @@ function buildActions(balance) {
 }
 
 const ACTION_BY_ID = Object.fromEntries(ACTIONS.map((action) => [action.id, action]));
+
+const GUNNER_SPELL_SPECS = {
+  "ice-dagger": {
+    key: "ice-dagger",
+    owner: "冰法",
+    name: "冰法炮台",
+    actionName: "Ji刀",
+    power: BALANCE.heroes.iceSorcerer.daggerPower,
+    range: 1,
+    damage: 1,
+  },
+  "astrologer-predict": {
+    key: "astrologer-predict",
+    owner: "占星家",
+    name: "占星炮台",
+    actionName: "预判鬼刀",
+    power: 5,
+    range: 2,
+    damage: 1,
+  },
+  "pharmacist-poison": {
+    key: "pharmacist-poison",
+    owner: "药师",
+    name: "药师炮台",
+    actionName: "毒刃",
+    power: BALANCE.heroes.pharmacist.poisonPower,
+    range: 1,
+    damage: BALANCE.heroes.pharmacist.poisonDamage,
+  },
+  "gunner-cannon": {
+    key: "gunner-cannon",
+    owner: "枪炮师",
+    name: "大炮炮台",
+    actionName: "无敌大炮",
+    power: BALANCE.heroes.gunner.cannonPower,
+    range: BALANCE.heroes.gunner.cannonRange,
+    damage: BALANCE.heroes.gunner.cannonDamage,
+  },
+  "gunner-machine-gun": {
+    key: "gunner-machine-gun",
+    owner: "枪炮师",
+    name: "机枪炮台",
+    actionName: "加特林",
+    power: BALANCE.heroes.gunner.machineGunPower,
+    range: BALANCE.heroes.gunner.machineGunRange,
+    damage: BALANCE.heroes.gunner.machineGunDamage,
+  },
+};
+
+const GUNNER_HERO_SPELL_KEYS = {
+  iceSorcerer: ["ice-dagger"],
+  astrologer: ["astrologer-predict"],
+  pharmacist: ["pharmacist-poison"],
+  gunner: ["gunner-cannon", "gunner-machine-gun"],
+};
 
 const HEROES = {
 
@@ -468,6 +543,150 @@ const HEROES = {
         const gained = context.damage * BALANCE.heroes.paladin.xpPerDamageTaken;
         self.xp += gained;
         context.notes.push(`${self.label}承伤蓄力，获得 ${gained} XP。`);
+      },
+    },
+  },
+  battleMage: {
+    id: "battleMage",
+    name: "战法 Battle Mage",
+    maxHp: BALANCE.heroes.battleMage.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: "以短攻、长攻驱动烈焰炫纹的近战法师。",
+    passives: [
+      { name: "烈焰炫纹", text: "每造成 1 点伤害获得 1 个 🔥；使用短攻/长攻时可按“表”附加回合开始时的炫纹伤害" },
+    ],
+    activeSkills: [],
+    hooks: {
+      init(self) {
+        self.flags.flameChasers = 0;
+        self.flags.roundStartFlameChasers = 0;
+      },
+      modifyDamage(value, self, target, context) {
+        if (!isBattleMageImprintedAction(context.action)) return value;
+        const bonus = self.flags.roundStartFlameChasers || 0;
+        context.battleMageBonusDamage = bonus;
+        return value + bonus;
+      },
+      onDealDamage(self, target, context) {
+        if (context.damage <= 0 || context.action.kind !== "attack") return;
+        if (isBattleMageImprintedAction(context.action) && !self.flags.battleMageImprintResolved) {
+          const recalled = self.flags.flameChasers || 0;
+          self.flags.flameChasers = 0;
+          self.flags.battleMageImprintResolved = true;
+          context.notes.push(`${self.label}收回 ${recalled} 个烈焰炫纹，表攻额外伤害 ${context.battleMageBonusDamage || 0}。`);
+        }
+        self.flags.flameChasers = (self.flags.flameChasers || 0) + context.damage;
+        context.notes.push(`${self.label}造成 ${context.damage} 点伤害，获得 ${context.damage} 个烈焰炫纹，当前 ${self.flags.flameChasers}🔥。`);
+      },
+      afterRound(self, opponent, context) {
+        if (!isBattleMageImprintedAction(context.selfAction)) return;
+        if (context.hit) return;
+        const lost = self.flags.flameChasers || 0;
+        self.flags.flameChasers = 0;
+        context.notes.push(`${self.label}表攻未命中，${lost} 个烈焰炫纹清零。`);
+      },
+    },
+  },
+  gunner: {
+    id: "gunner",
+    name: "枪炮师 Gunner",
+    maxHp: BALANCE.heroes.gunner.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: "吸收物理火力转化 XP，并偷师法术攻击装填炮台。",
+    passives: [
+      { name: "能量转化", text: "受到短攻/长攻时，按攻击名义费用获得 XP，攻击仍正常结算" },
+      { name: "偷师炮台", text: "首次吸收某种法术攻击需花费 1 XP 学习；之后获得对应炮台使用次数" },
+    ],
+    activeSkills: [
+      {
+        id: "gunner-cannon",
+        kind: "attack",
+        category: "skill",
+        name: "无敌大炮",
+        cost: BALANCE.heroes.gunner.cannonCost,
+        power: BALANCE.heroes.gunner.cannonPower,
+        range: BALANCE.heroes.gunner.cannonRange,
+        damage: BALANCE.heroes.gunner.cannonDamage,
+        defense: BALANCE.defenseGrades.small,
+        xpGain: 0,
+        magicalAttack: true,
+        gunnerSpellKey: "gunner-cannon",
+        gunnerSpellName: "无敌大炮",
+        text: `花费 ${BALANCE.heroes.gunner.cannonCost}，强度 ${BALANCE.heroes.gunner.cannonPower}，距离 ${BALANCE.heroes.gunner.cannonRange}，伤害 ${BALANCE.heroes.gunner.cannonDamage}，本回合小防`,
+      },
+      {
+        id: "gunner-machine-gun",
+        kind: "attack",
+        category: "skill",
+        name: "无敌机枪",
+        cost: BALANCE.heroes.gunner.machineGunCost,
+        power: BALANCE.heroes.gunner.machineGunPower,
+        range: BALANCE.heroes.gunner.machineGunRange,
+        damage: BALANCE.heroes.gunner.machineGunDamage,
+        defense: BALANCE.defenseGrades.small,
+        xpGain: 0,
+        magicalAttack: true,
+        gunnerSpellKey: "gunner-machine-gun",
+        gunnerSpellName: "加特林",
+        text: `花费 ${BALANCE.heroes.gunner.machineGunCost}，对目标连续两回合加特林：强度 ${BALANCE.heroes.gunner.machineGunPower}，距离 ${BALANCE.heroes.gunner.machineGunRange}，伤害 ${BALANCE.heroes.gunner.machineGunDamage}；两回合小防`,
+        effects: {
+          gunnerMachineGun: true,
+        },
+      },
+    ],
+    hooks: {
+      init(self) {
+        self.flags.gunnerLearnedSpells = {};
+        self.flags.gunnerStoredSpells = {};
+      },
+      canUseAction(action, self) {
+        if (action.effects?.gunnerLearnKey) return !isGunnerSpellLearned(self, action.effects.gunnerLearnKey);
+        if (!action.gunnerTurretKey) return true;
+        return getGunnerTurretCount(self, action.gunnerTurretKey) > 0;
+      },
+      modifyDefense(value, self) {
+        return hasEffectiveStatus(self, "gunner-machine-gun")
+          ? Math.max(value, BALANCE.defenseGrades.small)
+          : value;
+      },
+      beforeTakeDamage(self, attacker, context) {
+        if (context.damage <= 0) return context.damage;
+        if (context.gunnerAbsorbProcessed) return context.damage;
+        if (isGunnerPhysicalAbsorbable(context.action)) {
+          const gained = Math.max(0, context.action.cost || 0);
+          if (gained > 0) {
+            self.xp += gained;
+            context.notes.push(`${self.label}将${context.action.name}转化为能量，获得 ${gained} XP。`);
+          }
+          return context.damage;
+        }
+        if (isGunnerSpellAbsorbable(context.action)) {
+          absorbGunnerSpell(self, context.action, context);
+        }
+        return context.damage;
+      },
+      afterRound(self, opponent, context) {
+        if (context.selfAction.effects?.gunnerLearnKey) {
+          learnGunnerSpell(self, context.selfAction.effects.gunnerLearnKey, context.notes);
+          return;
+        }
+        if (context.selfAction.gunnerTurretKey) {
+          consumeGunnerTurretCharge(self, context.selfAction.gunnerTurretKey);
+          context.notes.push(`${self.label}消耗 1 次${context.selfAction.name}，剩余 ${getGunnerTurretCount(self, context.selfAction.gunnerTurretKey)} 次。`);
+        }
+        if (context.selfAction.id !== "gunner-machine-gun") return;
+        const target = context.selfAction.tacticalTarget || opponent;
+        if (!target) return;
+        setStatus(self, {
+          id: "gunner-machine-gun",
+          type: "positive",
+          name: "机枪架设",
+          text: `追踪${target.label}，下回合加特林`,
+          turns: 1,
+          fresh: true,
+          effects: { trackedTarget: target },
+        });
+        context.notes.push(`${self.label}架设机枪，下回合继续向${target.label}发射加特林，并获得小防。`);
       },
     },
   },
@@ -632,9 +851,9 @@ const HEROES = {
         name: "隐身",
         cost: BALANCE.heroes.ninja.stealthCost,
         power: 0,
-        defense: BALANCE.defenseGrades.small,
+        defense: 0,
         xpGain: 0,
-        text: `花费 ${BALANCE.heroes.ninja.stealthCost}，接下来 ${BALANCE.heroes.ninja.stealthTurns} 回合小防；本回合小防`,
+        text: `花费 ${BALANCE.heroes.ninja.stealthCost}，获得 ${BALANCE.heroes.ninja.stealthTurns} 回合隐形；贴近敌人或主动攻击会暴露，并将剩余回合转为小防`,
         effects: {
           stealth: true,
         },
@@ -648,7 +867,7 @@ const HEROES = {
         return action.id !== "ninja-shuriken" || (self.flags.shuriken || 0) > 0;
       },
       modifyDefense(value, self) {
-        return hasEffectiveStatus(self, "ninja-stealth") || hasEffectiveStatus(self, "ninja-shuriken-guard")
+        return hasEffectiveStatus(self, "ninja-stealth-guard") || hasEffectiveStatus(self, "ninja-shuriken-guard")
           ? Math.max(value, BALANCE.defenseGrades.small)
           : value;
       },
@@ -689,11 +908,11 @@ const HEROES = {
             id: "ninja-stealth",
             type: "positive",
             name: "隐身",
-            text: `${BALANCE.heroes.ninja.stealthTurns} 回合小防`,
+            text: `${BALANCE.heroes.ninja.stealthTurns} 回合隐形`,
             turns: BALANCE.heroes.ninja.stealthTurns,
             fresh: true,
           });
-          context.notes.push(`${self.label}进入隐身，接下来 ${BALANCE.heroes.ninja.stealthTurns} 回合获得小防。`);
+          context.notes.push(`${self.label}进入隐身，只有距离 1 的敌人能发现其位置。`);
         }
       },
     },
@@ -772,7 +991,10 @@ const HEROES = {
     maxHp: BALANCE.heroes.vaingloriousWarrior.maxHp,
     startingXp: BALANCE.heroes.vaingloriousWarrior.startingXp,
     description: `起手强势英雄，限制脆皮发育`,
-    passives: [{ name: "虚荣", text: `开局自带${BALANCE.heroes.vaingloriousWarrior.startingXp} XP` }],
+    passives: [
+      { name: "虚荣", text: `开局自带${BALANCE.heroes.vaingloriousWarrior.startingXp} XP` },
+      { name: "凯旋入场", text: "每次进入据点时获得 1 XP" },
+    ],
     activeSkills: [],
     hooks: {},
   },
@@ -831,6 +1053,9 @@ const HEROES = {
         range: 1,
         defense: 0,
         xpGain: 0,
+        magicalAttack: true,
+        gunnerSpellKey: "ice-dagger",
+        gunnerSpellName: "Ji刀",
         text: `花费 0，攻击强度 ${BALANCE.heroes.iceSorcerer.daggerPower}，命中 +${BALANCE.heroes.iceSorcerer.daggerHitShards}🧊，未命中 +${BALANCE.heroes.iceSorcerer.daggerMissShards}🧊`,
         effects: {
           trueDamage: true,
@@ -934,7 +1159,7 @@ const HEROES = {
         return hasStatus(self, "astrologer-prediction") ? Math.max(value, BALANCE.defenseGrades.small) : value;
       },
       onDealDamage(self, target, context) {
-        if (context.action.id !== "atk-5") return;
+        if (context.action.id !== "atk-5" && !context.action.allowAstrologerGhostHeal) return;
         const beforeHp = self.hp;
         self.hp = Math.min(self.maxHp, self.hp + BALANCE.heroes.astrologer.ghostHealPerDamage * context.damage);
         const healed = self.hp - beforeHp;
@@ -1077,7 +1302,10 @@ const HERO_AVATARS = {
   paladin:"./pic/paladin.png",
   balancedBot:"./pic/bot1.png",
   ninja:"./pic/ninja.png",
-  puppet:"./pic/puppet.png"
+  puppet:"./pic/puppet.png",
+  gunner:"./pic/gunner.png",
+  battleMage:"./pic/battlemage.png",
+  battery:"./pic/battery.png"
 };
 
 const STORAGE_KEYS = {
@@ -1097,6 +1325,8 @@ const SKILL_ANIMATION_TYPES = {
   "ninja-shuriken": "attack",
   "ninja-stealth": "shield-skill",
   "puppet-shield": "shield-skill",
+  "gunner-cannon": "attack",
+  "gunner-machine-gun": "attack",
 };
 
 const state = {
@@ -1596,7 +1826,9 @@ function formatStatusTag(entry, fighter = null) {
   if (!entry.text) return entry.name;
   if ((fighter?.hero?.passives || []).includes(entry)) return entry.name;
   if (entry.name === "寒冰碎片" && entry.text.includes("🧊")) return entry.text.replace(/\s+/g, "");
+  if (entry.name === "烈焰炫纹" && entry.text.includes("🔥")) return entry.text.replace(/\s+/g, "");
   if (entry.name === "寒冰碎片") return "碎片机制";
+  if (entry.name === "炮台") return entry.text === "未装填" ? "炮台未装填" : `炮台 ${entry.text}`;
   if (entry.name === "手里剑") return `手里剑 ${entry.text}`;
   if (entry.name === "生命盾") return `盾：${entry.text}`;
   if (entry.name === "待机储备") return `${entry.name} ${entry.text}`;
@@ -1608,7 +1840,9 @@ function formatStatusTag(entry, fighter = null) {
 function openHeroDetail(fighter) {
   const hero = fighter.hero;
   ui.heroDetailTitle.textContent = getHeroDisplayName(hero);
-  ui.heroDetailMeta.textContent = `${fighter.startingHp}血，开局 ${hero.startingXp} XP`;
+  ui.heroDetailMeta.textContent = hero.startingXp > 0
+    ? `${fighter.startingHp}血，开局 ${hero.startingXp} XP`
+    : `${fighter.startingHp}血`;
   ui.heroDetailBody.innerHTML = "";
   renderHeroAvatar(ui.heroDetailAvatar, hero);
 
@@ -2028,8 +2262,17 @@ function getFighterStatusEntries(fighter) {
   if (fighter.flags.iceShards !== undefined) {
     entries.push({ name: "寒冰碎片", text: `${"🧊".repeat(Math.min(fighter.flags.iceShards, 10))} x${fighter.flags.iceShards}` });
   }
+  if (fighter.flags.flameChasers !== undefined) {
+    entries.push({ name: "烈焰炫纹", text: `${"🔥".repeat(Math.min(fighter.flags.flameChasers, 10))} x${fighter.flags.flameChasers}` });
+  }
   if (fighter.flags.iceDaggerStreak > 0) {
     entries.push({ name: "Ji刀连出", text: `${fighter.flags.iceDaggerStreak}/${BALANCE.heroes.iceSorcerer.daggerStreakLimit}` });
+  }
+  if (fighter.heroId === "gunner") {
+    const turrets = getGunnerKnownSpellEntries(fighter)
+      .map(({ spec, count }) => `${spec.name} x${count}`)
+      .join(" / ");
+    entries.push({ name: "炮台", text: turrets || "未装填" });
   }
   if (fighter.flags.shuriken !== undefined) {
     entries.push({ name: "手里剑", text: `x${fighter.flags.shuriken}` });
@@ -2045,7 +2288,7 @@ function getFighterStatusEntries(fighter) {
       .map((id) => PHARMACIST_LOADOUT_OPTIONS.find((option) => option.id === id)?.name)
       .filter(Boolean)
       .join(" / ");
-    entries.push({ id: "pharmacist-loadout", name: "配药", text: names });
+    entries.push({ id: "pharmacist-loadout", name: "配药", text: names || "未选择" });
   }
   for (const status of fighter.statuses) {
     entries.push({ name: status.name, text: status.text || "" });
@@ -2611,10 +2854,11 @@ function resolveMeleeRound(playerPlans, options = {}) {
     const targetPlan = plans.get(target.id);
     const defense = targetPlan ? getIncomingDefense(target, targetPlan.action, intent.source) : defenses.get(target.id) || 0;
     const attack = getAttack(intent.source, intent.action, target);
+    const absorbSeed = processGunnerIncomingAttack(target, intent.source, intent.action, notes);
     if (attack > defense) {
       const sourcePlan = plans.get(intent.source.id);
       sourcePlan.context.hit = true;
-      meleeHits.push({ ...intent, target, sourcePlan, defense, attack });
+      meleeHits.push({ ...intent, target, sourcePlan, defense, attack, absorbSeed });
     } else {
       const sourcePlan = plans.get(intent.source.id);
       if (sourcePlan) {
@@ -2761,7 +3005,18 @@ function getMeleeAttackIntents(plans) {
     intents.push({
       source: plan.fighter,
       targetId: trackedTarget.id,
-      action: { ...ACTION_BY_ID["atk-5"], name: "预判·鬼刀" },
+      action: makeAstrologerGhostAction(),
+      scheduled: true,
+    });
+  }
+  for (const plan of plans.values()) {
+    const barrage = plan.fighter.statuses?.find((status) => status.id === "gunner-machine-gun");
+    const trackedTarget = barrage?.effects?.trackedTarget;
+    if (!trackedTarget || !isFighterTargetable(trackedTarget) || trackedTarget.id === plan.fighter.id) continue;
+    intents.push({
+      source: plan.fighter,
+      targetId: trackedTarget.id,
+      action: makeGunnerGatlingAction(),
       scheduled: true,
     });
   }
@@ -2787,7 +3042,7 @@ function getRedirectedMeleeAttackIntents(intents, plans, defenses, logs) {
 function applyMeleeHitDamage(hits, logs, notes) {
   const hitsByTarget = new Map();
   for (const hit of hits) {
-    const context = { action: hit.action, damage: 1, notes };
+    const context = { ...(hit.absorbSeed || {}), action: hit.action, damage: 1, notes };
     if (hit.target.flags?.puppetStandby) {
       const standbyDamage = getEffectiveDamage(hit.source, hit.target, hit.action, context);
       if (standbyDamage <= 0) {
@@ -2909,9 +3164,217 @@ function getActionById(actionId, fighter) {
 
 function getHeroActions(fighter) {
   const skills = fighter?.hero?.activeSkills || [];
+  if (fighter?.heroId === "gunner") return [...skills, ...getGunnerLearnActions(fighter), ...getGunnerTurretActions(fighter)];
   if (fighter?.heroId !== "pharmacist") return skills;
   const loadout = fighter.flags.pharmacistLoadout || DEFAULT_PHARMACIST_LOADOUT;
   return skills.filter((skill) => loadout.includes(skill.id));
+}
+
+function isBattleMageImprintEligible(action) {
+  return action?.kind === "attack" && ["range-1", "range-2"].includes(action.category || "");
+}
+
+function isBattleMageImprintedAction(action) {
+  return Boolean(action?.battleMageImprint && isBattleMageImprintEligible(action));
+}
+
+function isGunnerPhysicalAbsorbable(action) {
+  return action?.kind === "attack"
+    && ["range-1", "range-2"].includes(action.category || "")
+    && !action.magicalAttack
+    && !action.effects?.skillAttack
+    && !action.tacticalEffect;
+}
+
+function isGunnerSpellAbsorbable(action) {
+  return Boolean(action?.kind === "attack" && (action.magicalAttack || action.effects?.skillAttack || GUNNER_SPELL_SPECS[action.id] || action.gunnerSpellKey));
+}
+
+function getGunnerSpellSpec(action) {
+  if (!action) return null;
+  const key = action.gunnerSpellKey || action.id;
+  const known = GUNNER_SPELL_SPECS[key];
+  if (known) return { ...known };
+  if (!action.magicalAttack && !action.effects?.skillAttack) return null;
+  return {
+    key,
+    owner: "未知",
+    name: `${action.gunnerSpellName || action.name}炮台`,
+    actionName: action.gunnerSpellName || action.name,
+    power: action.power || action.effects?.skillAttackPower || 0,
+    range: action.range || 1,
+    damage: action.damage || action.effects?.damage || 1,
+  };
+}
+
+function absorbGunnerSpell(fighter, action, context) {
+  const spec = getGunnerSpellSpec(action);
+  if (!spec) return;
+  fighter.flags.gunnerLearnedSpells ||= {};
+  fighter.flags.gunnerStoredSpells ||= {};
+
+  if (!fighter.flags.gunnerLearnedSpells[spec.key]) {
+    context.notes.push(`${fighter.label}尚未学习${spec.name}，无法吸收${spec.actionName}。`);
+    return;
+  }
+
+  const current = fighter.flags.gunnerStoredSpells[spec.key] || { count: 0, spec };
+  current.count += 1;
+  current.spec = spec;
+  fighter.flags.gunnerStoredSpells[spec.key] = current;
+  context.gunnerSpellAbsorbed = true;
+  context.notes.push(`${fighter.label}吸收${spec.actionName}，${spec.name}剩余 ${current.count} 次。`);
+}
+
+function isGunnerSpellLearned(fighter, key) {
+  return Boolean(fighter?.flags?.gunnerLearnedSpells?.[key]);
+}
+
+function learnGunnerSpell(fighter, key, notes = []) {
+  const spec = GUNNER_SPELL_SPECS[key];
+  if (!spec || isGunnerSpellLearned(fighter, key)) return;
+  fighter.flags.gunnerLearnedSpells ||= {};
+  fighter.flags.gunnerStoredSpells ||= {};
+  fighter.flags.gunnerLearnedSpells[key] = spec.name;
+  fighter.flags.gunnerStoredSpells[key] ||= { count: 0, spec };
+  notes.push(`${fighter.label}学会${spec.name}，之后可吸收${spec.actionName}并装填炮台。`);
+}
+
+function processGunnerIncomingAttack(defender, attacker, action, notes) {
+  if (defender?.heroId !== "gunner" || action?.kind !== "attack") return null;
+  if (action.tacticalMiss || action.tacticalSkipLegacyAttack) return null;
+  const context = {
+    action,
+    damage: action.damage || 1,
+    notes,
+    gunnerAbsorbProcessed: false,
+  };
+  if (isGunnerPhysicalAbsorbable(action)) {
+    const gained = Math.max(0, action.cost || 0);
+    if (gained > 0) {
+      defender.xp += gained;
+      notes.push(`${defender.label}将${action.name}转化为能量，获得 ${gained} XP。`);
+    }
+    context.gunnerAbsorbProcessed = true;
+  } else if (isGunnerSpellAbsorbable(action)) {
+    absorbGunnerSpell(defender, action, context);
+    context.gunnerAbsorbProcessed = true;
+  }
+  return context.gunnerAbsorbProcessed ? context : null;
+}
+
+function getGunnerStoredSpellEntries(fighter) {
+  const stored = fighter?.flags?.gunnerStoredSpells || {};
+  return Object.entries(stored)
+    .map(([key, entry]) => ({ key, count: entry.count || 0, spec: entry.spec || GUNNER_SPELL_SPECS[key] }))
+    .filter((entry) => entry.count > 0 && entry.spec);
+}
+
+function getGunnerKnownSpellEntries(fighter) {
+  const learned = fighter?.flags?.gunnerLearnedSpells || {};
+  const stored = fighter?.flags?.gunnerStoredSpells || {};
+  const keys = new Set([...Object.keys(learned), ...Object.keys(stored)]);
+  return Array.from(keys)
+    .map((key) => ({ key, count: stored[key]?.count || 0, spec: stored[key]?.spec || GUNNER_SPELL_SPECS[key] }))
+    .filter((entry) => entry.spec);
+}
+
+function getGunnerFieldSpellSpecs(fighter) {
+  if (!fighter) return [];
+  const allFighters = state?.melee?.fighters?.length
+    ? state.melee.fighters
+    : [state?.player, state?.enemy, state?.enemyB].filter(Boolean);
+  const keys = new Set();
+  for (const candidate of allFighters) {
+    if (!candidate || candidate === fighter || candidate.id === fighter.id) continue;
+    const candidateKeys = GUNNER_HERO_SPELL_KEYS[candidate.heroId] || [];
+    for (const key of candidateKeys) {
+      if (key === "pharmacist-poison" && !hasPharmacistLoadout(candidate, "pharmacist-poison")) continue;
+      keys.add(key);
+    }
+  }
+  return Array.from(keys).map((key) => GUNNER_SPELL_SPECS[key]).filter(Boolean);
+}
+
+function getGunnerLearnActions(fighter) {
+  return getGunnerFieldSpellSpecs(fighter)
+    .filter((spec) => !isGunnerSpellLearned(fighter, spec.key))
+    .map((spec) => ({
+      id: `gunner-learn-${spec.key}`,
+      kind: "skill",
+      name: spec.name,
+      cost: BALANCE.heroes.gunner.spellLearnCost,
+      power: 0,
+      defense: 0,
+      xpGain: 0,
+      text: `花费 ${BALANCE.heroes.gunner.spellLearnCost}，学习吸收${spec.owner}的${spec.actionName}；学会后被该攻击命中/攻击到会装填炮台`,
+      effects: {
+        gunnerLearnKey: spec.key,
+      },
+    }));
+}
+
+function getGunnerTurretActions(fighter) {
+  return getGunnerKnownSpellEntries(fighter).map(({ key, count, spec }) => ({
+    id: `gunner-turret-${key}`,
+    kind: "attack",
+    category: "skill",
+    name: spec.name,
+    cost: 0,
+    power: spec.power,
+    range: spec.range,
+    damage: spec.damage,
+    defense: 0,
+    xpGain: 0,
+    magicalAttack: true,
+    gunnerTurretKey: key,
+    gunnerSpellKey: key,
+    gunnerSpellName: spec.actionName,
+    text: `释放偷师的${spec.actionName}，剩余 ${count} 次；只保留攻击伤害，不附带原技能额外效果`,
+    effects: {
+      gunnerTurret: true,
+    },
+  }));
+}
+
+function getGunnerTurretCount(fighter, key) {
+  return fighter?.flags?.gunnerStoredSpells?.[key]?.count || 0;
+}
+
+function consumeGunnerTurretCharge(fighter, key) {
+  const entry = fighter?.flags?.gunnerStoredSpells?.[key];
+  if (!entry) return;
+  entry.count = Math.max(0, (entry.count || 0) - 1);
+}
+
+function makeAstrologerGhostAction() {
+  return {
+    ...ACTION_BY_ID["atk-5"],
+    id: "astrologer-ghost-knife",
+    name: "预判·鬼刀",
+    magicalAttack: true,
+    gunnerSpellKey: "astrologer-predict",
+    gunnerSpellName: "预判鬼刀",
+    allowAstrologerGhostHeal: true,
+  };
+}
+
+function makeGunnerGatlingAction() {
+  return {
+    id: "gunner-gatling",
+    kind: "attack",
+    category: "skill",
+    name: "加特林",
+    cost: 0,
+    power: BALANCE.heroes.gunner.machineGunPower,
+    range: BALANCE.heroes.gunner.machineGunRange,
+    damage: BALANCE.heroes.gunner.machineGunDamage,
+    defense: 0,
+    xpGain: 0,
+    magicalAttack: true,
+    gunnerSpellKey: "gunner-machine-gun",
+    gunnerSpellName: "加特林",
+  };
 }
 
 function hasPharmacistLoadout(fighter, optionId) {
@@ -3050,7 +3513,7 @@ function assessIncomingThreat(attacker, defender = null) {
 function getScheduledIncomingAttack(attacker, defender = null) {
   let maxAttack = 0;
   if (hasStatus(attacker, "astrologer-prediction")) {
-    maxAttack = Math.max(maxAttack, getAttack(attacker, ACTION_BY_ID["atk-5"], defender));
+    maxAttack = Math.max(maxAttack, getAttack(attacker, makeAstrologerGhostAction(), defender));
   }
   return maxAttack;
 }
@@ -3118,9 +3581,13 @@ function resolveRound(playerAction, enemyAction) {
   applyPostDefenseSkillEffects(enemy, enemyAction, player, playerIncomingDefense, logs);
   applyScheduledGhostAttack(player, enemy, enemyIncomingDefense, logs, damageNotes, ui.enemyCard, contextForPlayer);
   applyScheduledGhostAttack(enemy, player, playerIncomingDefense, logs, damageNotes, ui.playerCard, contextForEnemy);
+  applyScheduledGunnerMachineGun(player, enemy, enemyIncomingDefense, logs, damageNotes, ui.enemyCard, contextForPlayer);
+  applyScheduledGunnerMachineGun(enemy, player, playerIncomingDefense, logs, damageNotes, ui.playerCard, contextForEnemy);
 
   const playerUsesAttack = isResolvedAttack(playerAction);
   const enemyUsesAttack = isResolvedAttack(enemyAction);
+  const playerAttackContextSeed = playerUsesAttack ? processGunnerIncomingAttack(enemy, player, playerAction, damageNotes) : null;
+  const enemyAttackContextSeed = enemyUsesAttack ? processGunnerIncomingAttack(player, enemy, enemyAction, damageNotes) : null;
 
   if (playerUsesAttack && enemyUsesAttack) {
     const playerHits = playerAttack > enemyIncomingDefense;
@@ -3128,11 +3595,11 @@ function resolveRound(playerAction, enemyAction) {
 
     if (playerHits) {
       contextForPlayer.hit = true;
-      contextForPlayer.damageDealt = dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 对攻压过${enemy.label} ${enemyAction.name}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
+      contextForPlayer.damageDealt = dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 对攻压过${enemy.label} ${enemyAction.name}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard, playerAttackContextSeed);
     }
     if (enemyHits) {
       contextForEnemy.hit = true;
-      contextForEnemy.damageDealt = dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 对攻压过${player.label}的 ${playerAction.name}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
+      contextForEnemy.damageDealt = dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 对攻压过${player.label}的 ${playerAction.name}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard, enemyAttackContextSeed);
     }
     if (!playerHits && !enemyHits && playerAttack === enemyAttack) {
       logs.push({ text: `双方对攻强度同为 ${playerAttack}，互相抵消。` });
@@ -3143,14 +3610,14 @@ function resolveRound(playerAction, enemyAction) {
 
     if (playerHits) {
       contextForPlayer.hit = true;
-      contextForPlayer.damageDealt = dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 击穿${enemy.label}防御 ${formatDefense(enemyIncomingDefense)}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard);
+      contextForPlayer.damageDealt = dealDamage(player, enemy, playerAction, `${player.label}用 ${playerAction.name} 击穿${enemy.label}防御 ${formatDefense(enemyIncomingDefense)}，${enemy.label} HP -1。`, logs, damageNotes, ui.enemyCard, playerAttackContextSeed);
     } else if (playerUsesAttack) {
       logs.push({ text: `${player.label}用 ${playerAction.name}，强度 ${playerAttack} 未超过${enemy.label}防御 ${formatDefense(enemyIncomingDefense)}。` });
     }
 
     if (enemyHits) {
       contextForEnemy.hit = true;
-      contextForEnemy.damageDealt = dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 击穿${player.label}防御 ${formatDefense(playerIncomingDefense)}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard);
+      contextForEnemy.damageDealt = dealDamage(enemy, player, enemyAction, `${enemy.label}用 ${enemyAction.name} 击穿${player.label}防御 ${formatDefense(playerIncomingDefense)}，${player.label} HP -1。`, logs, damageNotes, ui.playerCard, enemyAttackContextSeed);
     } else if (enemyUsesAttack) {
       logs.push({ text: `${enemy.label}用 ${enemyAction.name}，强度 ${enemyAttack} 未超过${player.label}防御 ${formatDefense(playerIncomingDefense)}。` });
     }
@@ -3248,8 +3715,9 @@ function buildActionAnimation(side, targetSide, action, attack, defense, context
   return null;
 }
 
-function dealDamage(attacker, defender, action, text, logs, damageNotes, defenderCard) {
-  const context = { action, damage: action.damage || 1, notes: damageNotes };
+function dealDamage(attacker, defender, action, text, logs, damageNotes, defenderCard, contextSeed = null) {
+  const context = contextSeed || {};
+  Object.assign(context, { action, damage: action.damage || 1, notes: damageNotes });
   const damage = getEffectiveDamage(attacker, defender, action, context);
   if (damage <= 0) {
     logs.push({ kind: "impact", text: `${attacker.label}用 ${action.name} 命中${defender.label}，但未伤及真血。` });
@@ -3266,6 +3734,10 @@ function dealDamage(attacker, defender, action, text, logs, damageNotes, defende
 
 function clearRoundPhaseFlags(fighter) {
   if (!fighter?.flags) return;
+  if (fighter.heroId === "battleMage") {
+    fighter.flags.roundStartFlameChasers = fighter.flags.flameChasers || 0;
+    fighter.flags.battleMageImprintResolved = false;
+  }
   fighter.flags.chaseTargets = [];
   fighter.flags.extraRoundDefense = 0;
   fighter.flags.roundPositiveEffects = [];
@@ -3497,11 +3969,22 @@ function reviveAsClassic(fighter) {
 function applyPostDefenseSkillEffects(fighter, action, target, targetDefense, logs) {
   if (action.effects?.skillAttack) {
     const attack = action.effects.skillAttackPower || action.power || 0;
+    const damageAction = {
+      ...action,
+      kind: "attack",
+      power: attack,
+      damage: action.effects.damage || 1,
+      magicalAttack: true,
+      gunnerSpellKey: action.gunnerSpellKey || action.id,
+      gunnerSpellName: action.gunnerSpellName || action.name,
+    };
     if (attack > targetDefense) {
       const damageNotes = [];
-      const damageAction = { ...action, kind: "attack", power: attack, damage: action.effects.damage || 1 };
-      dealDamage(fighter, target, damageAction, `${fighter.label}用 ${action.name} 击穿${target.label}防御 ${formatDefense(targetDefense)}，${target.label} HP -1。`, logs, damageNotes);
-      if (action.effects.poisonTurns && target.hp > 0) {
+      const damageContext = {};
+      const absorbSeed = processGunnerIncomingAttack(target, fighter, damageAction, damageNotes);
+      dealDamage(fighter, target, damageAction, `${fighter.label}用 ${action.name} 击穿${target.label}防御 ${formatDefense(targetDefense)}，${target.label} HP -1。`, logs, damageNotes, null, absorbSeed || damageContext);
+      const resolvedDamageContext = absorbSeed || damageContext;
+      if (action.effects.poisonTurns && target.hp > 0 && !resolvedDamageContext.gunnerSpellAbsorbed) {
         setStatus(target, {
           id: "pharmacist-poisoned",
           type: "negative",
@@ -3514,9 +3997,14 @@ function applyPostDefenseSkillEffects(fighter, action, target, targetDefense, lo
           },
         });
         damageNotes.push(`${target.label}中毒，接下来 ${action.effects.poisonTurns} 回合每回合 HP -${BALANCE.heroes.pharmacist.poisonTickDamage}。`);
+      } else if (action.effects.poisonTurns && resolvedDamageContext.gunnerSpellAbsorbed) {
+        damageNotes.push(`${target.label}偷师了${action.name}的攻击部分，后续中毒未生效。`);
       }
       for (const note of damageNotes) logs.push({ text: note });
     } else {
+      const damageNotes = [];
+      processGunnerIncomingAttack(target, fighter, damageAction, damageNotes);
+      for (const note of damageNotes) logs.push({ text: note });
       logs.push({ text: `${fighter.label}用 ${action.name}，强度 ${attack} 未超过${target.label}防御 ${formatDefense(targetDefense)}。` });
     }
   }
@@ -3537,13 +4025,34 @@ function applyPostDefenseSkillEffects(fighter, action, target, targetDefense, lo
 
 function applyScheduledGhostAttack(source, target, targetDefense, logs, damageNotes, targetCard, context) {
   if (!hasStatus(source, "astrologer-prediction")) return;
-  const ghostAction = ACTION_BY_ID["atk-5"];
+  const ghostAction = makeAstrologerGhostAction();
   const ghostAttack = getAttack(source, ghostAction, target);
+  const absorbSeed = processGunnerIncomingAttack(target, source, ghostAction, damageNotes);
   if (ghostAttack > targetDefense) {
     context.hit = true;
-    context.damageDealt += dealDamage(source, target, ghostAction, `${source.label}预判的鬼刀从天而降，击穿${target.label}防御 ${formatDefense(targetDefense)}，${target.label} HP -1。`, logs, damageNotes, targetCard);
+    context.damageDealt += dealDamage(source, target, ghostAction, `${source.label}预判的鬼刀从天而降，击穿${target.label}防御 ${formatDefense(targetDefense)}，${target.label} HP -1。`, logs, damageNotes, targetCard, absorbSeed);
   } else {
     logs.push({ text: `${source.label}预判的鬼刀从天而降，强度 ${ghostAttack} 未超过${target.label}防御 ${formatDefense(targetDefense)}。` });
+  }
+}
+
+function applyScheduledGunnerMachineGun(source, fallbackTarget, fallbackDefense, logs, damageNotes, targetCard, context) {
+  const status = source.statuses?.find((entry) => entry.id === "gunner-machine-gun");
+  if (!status) return;
+  const target = status.effects?.trackedTarget || fallbackTarget;
+  if (!target || !isFighterTargetable(target)) {
+    logs.push({ text: `${source.label}的加特林失去目标。` });
+    return;
+  }
+  const action = makeGunnerGatlingAction();
+  const defense = target === fallbackTarget ? fallbackDefense : getIncomingDefense(target, ACTION_BY_ID.ji, source);
+  const attack = getAttack(source, action, target);
+  const absorbSeed = processGunnerIncomingAttack(target, source, action, damageNotes);
+  if (attack > defense) {
+    context.hit = true;
+    context.damageDealt += dealDamage(source, target, action, `${source.label}的加特林继续扫射，击穿${target.label}防御 ${formatDefense(defense)}，${target.label} HP -1。`, logs, damageNotes, target === fallbackTarget ? targetCard : null, absorbSeed);
+  } else {
+    logs.push({ text: `${source.label}的加特林继续扫射，强度 ${attack} 未超过${target.label}防御 ${formatDefense(defense)}。` });
   }
 }
 
@@ -3663,7 +4172,7 @@ function applyPreDamageEffects(fighter, action, logs, target = fighter) {
 
   if (effects.stealth) {
     markRoundPositiveEffect(target, action.name);
-    details.push(`接下来 ${BALANCE.heroes.ninja.stealthTurns} 回合小防`);
+    details.push(`获得 ${BALANCE.heroes.ninja.stealthTurns} 回合隐形，暴露后剩余回合转为小防`);
   }
 
   if (effects.puppetShield) {

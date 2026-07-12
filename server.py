@@ -60,9 +60,40 @@ def sanitize_loadout(value):
     return [str(item)[:32] for item in value[:2] if isinstance(item, str)]
 
 
+def sanitize_hero_ids(value, fallback):
+    if not isinstance(value, list):
+        return [fallback, "priest"]
+    heroes = [str(item)[:48] for item in value[:2] if isinstance(item, str) and item]
+    while len(heroes) < 2:
+        heroes.append("priest" if heroes else fallback)
+    return heroes
+
+
+def sanitize_room_blob(value):
+    return value if isinstance(value, dict) else None
+
+
 def validate_tactical_plan(plan, phase):
     if not isinstance(plan, dict) or plan.get("phase") != phase:
         return "计划阶段不匹配。"
+    team_plans = plan.get("teamPlans")
+    if isinstance(team_plans, list):
+        if len(team_plans) > 2:
+            return "小队计划数量无效。"
+        for item in team_plans:
+            if not isinstance(item, dict):
+                return "小队计划格式无效。"
+            if phase == "movement":
+                path = item.get("path", [])
+                if not isinstance(path, list) or len(path) > 1:
+                    return "移动计划无效。"
+                for tile in path:
+                    if not isinstance(tile, dict) or not isinstance(tile.get("row"), int) or not isinstance(tile.get("col"), int):
+                        return "移动坐标无效。"
+            elif phase == "action":
+                if not isinstance(item.get("actionId"), str) or not item["actionId"]:
+                    return "行动计划缺少动作。"
+        return None
     if phase == "movement":
         path = plan.get("path", [])
         if not isinstance(path, list) or len(path) > 1:
@@ -89,6 +120,9 @@ def public_room(room, player_id=None):
         "mode": room.get("mode", "legacy"),
         "phase": room.get("phase", "action"),
         "players": room["players"],
+        "mapConfig": room.get("mapConfig"),
+        "spawns": room.get("spawns"),
+        "scoringRules": room.get("scoringRules"),
         "submitted": submitted,
         "result": room["result"],
         "slot": find_slot(room, player_id) if player_id else None,
@@ -136,9 +170,10 @@ class Handler(BaseHTTPRequestHandler):
             if not hero_id:
                 error(self, 400, "缺少英雄。")
                 return
-            if mode not in ("legacy", "tactical"):
+            if mode not in ("legacy", "tactical", "tactical-team"):
                 error(self, 400, "未知房间模式。")
                 return
+            hero_ids = sanitize_hero_ids(data.get("heroIds"), str(hero_id))
             with LOCK:
                 code = new_code()
                 player_id = secrets.token_urlsafe(12)
@@ -146,11 +181,14 @@ class Handler(BaseHTTPRequestHandler):
                     "code": code,
                     "round": 1,
                     "mode": mode,
-                    "phase": "movement" if mode == "tactical" else "action",
+                    "phase": "movement" if mode in ("tactical", "tactical-team") else "action",
                     "players": {
-                        "p1": {"playerId": player_id, "heroId": hero_id, "name": player_name, "pharmacistLoadout": loadout},
+                        "p1": {"playerId": player_id, "heroId": hero_id, "heroIds": hero_ids, "name": player_name, "pharmacistLoadout": loadout},
                         "p2": None,
                     },
+                    "mapConfig": sanitize_room_blob(data.get("mapConfig")),
+                    "spawns": sanitize_room_blob(data.get("spawns")),
+                    "scoringRules": sanitize_room_blob(data.get("scoringRules")),
                     "choices": {},
                     "result": None,
                     "acks": set(),
@@ -168,6 +206,7 @@ class Handler(BaseHTTPRequestHandler):
             if not hero_id:
                 error(self, 400, "缺少英雄。")
                 return
+            hero_ids = sanitize_hero_ids(data.get("heroIds"), str(hero_id))
             with LOCK:
                 room = ROOMS.get(code)
                 if not room:
@@ -177,7 +216,7 @@ class Handler(BaseHTTPRequestHandler):
                     error(self, 409, "房间已满。")
                     return
                 player_id = secrets.token_urlsafe(12)
-                room["players"]["p2"] = {"playerId": player_id, "heroId": hero_id, "name": player_name, "pharmacistLoadout": loadout}
+                room["players"]["p2"] = {"playerId": player_id, "heroId": hero_id, "heroIds": hero_ids, "name": player_name, "pharmacistLoadout": loadout}
             json_response(self, 200, {"code": code, "playerId": player_id, "slot": "p2"})
         except Exception as exc:
             error(self, 400, str(exc))
@@ -228,7 +267,7 @@ class Handler(BaseHTTPRequestHandler):
                 if room["result"]:
                     json_response(self, 200, public_room(room, player_id))
                     return
-                if room.get("mode") == "tactical":
+                if room.get("mode") in ("tactical", "tactical-team"):
                     plan_error = validate_tactical_plan(plan, room.get("phase"))
                     if plan_error:
                         error(self, 400, plan_error)
@@ -240,7 +279,7 @@ class Handler(BaseHTTPRequestHandler):
                         return
                     room["choices"][slot] = action_id
                 if room["choices"].get("p1") and room["choices"].get("p2"):
-                    if room.get("mode") == "tactical":
+                    if room.get("mode") in ("tactical", "tactical-team"):
                         room["result"] = {
                             "round": room["round"],
                             "phase": room["phase"],
@@ -281,11 +320,11 @@ class Handler(BaseHTTPRequestHandler):
                     room["acks"].add(slot)
                     active_slots = {key for key, value in room["players"].items() if value}
                     if active_slots and room["acks"] >= active_slots:
-                        if room.get("mode") == "tactical" and room.get("phase") == "movement":
+                        if room.get("mode") in ("tactical", "tactical-team") and room.get("phase") == "movement":
                             room["phase"] = "action"
                         else:
                             room["round"] += 1
-                            if room.get("mode") == "tactical":
+                            if room.get("mode") in ("tactical", "tactical-team"):
                                 room["phase"] = "movement"
                         room["choices"] = {}
                         room["result"] = None

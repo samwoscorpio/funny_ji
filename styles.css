@@ -145,6 +145,16 @@ p {
   filter: saturate(0.55) brightness(0.78);
 }
 
+.tactical-shell[data-phase="loadout"] .action-dock {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px #080604, 0 0 0 3px #76551f, inset 0 0 0 1px #f2ce79, inset 0 0 28px rgba(224, 181, 76, 0.28), 5px 6px 0 rgba(0, 0, 0, 0.55);
+}
+
+.tactical-shell[data-phase="loadout"] .map-panel {
+  opacity: 0.7;
+  filter: saturate(0.62) brightness(0.74);
+}
+
 .tactical-shell[data-phase="action"] .action-dock {
   border-color: var(--gold);
   box-shadow: 0 0 0 1px #080604, 0 0 0 3px #75531d, inset 0 0 0 1px #f0c971, inset 0 0 24px rgba(138, 91, 28, 0.28), 5px 6px 0 rgba(0, 0, 0, 0.55);
@@ -221,6 +231,12 @@ h2 {
   color: #bdeaff;
   border-color: #2f79a7;
   background: #10233a;
+}
+
+.phase-chip[data-phase="loadout"] {
+  color: #ffe19a;
+  border-color: #b7802c;
+  background: #32200c;
 }
 
 .phase-chip[data-phase="action"] {
@@ -444,6 +460,58 @@ h2 {
   pointer-events: none;
 }
 
+.thin-wall-edge {
+  position: absolute;
+  z-index: 7;
+  display: block;
+  background: #070504;
+  border: 1px solid #d7c5a4;
+  box-shadow: 0 0 0 1px #000, 0 0 8px rgba(255, 217, 136, 0.32);
+  pointer-events: none;
+}
+
+.thin-wall-edge.edge-west,
+.thin-wall-edge.edge-east {
+  top: 25%;
+  width: 5px;
+  height: 50%;
+}
+
+.thin-wall-edge.edge-west { left: 1px; }
+.thin-wall-edge.edge-east { right: 1px; }
+
+.thin-wall-edge.edge-north-west,
+.thin-wall-edge.edge-north-east,
+.thin-wall-edge.edge-south-west,
+.thin-wall-edge.edge-south-east {
+  width: 44%;
+  height: 5px;
+}
+
+.thin-wall-edge.edge-north-west {
+  top: 13%;
+  left: 7%;
+  transform: rotate(-29deg);
+}
+
+.thin-wall-edge.edge-north-east {
+  top: 13%;
+  right: 7%;
+  transform: rotate(29deg);
+}
+
+.thin-wall-edge.edge-south-west {
+  bottom: 13%;
+  left: 7%;
+  transform: rotate(29deg);
+}
+
+.thin-wall-edge.edge-south-east {
+  right: 7%;
+  bottom: 13%;
+  transform: rotate(-29deg);
+}
+
 .map-tile.bush {
   background: repeating-linear-gradient(135deg, #405d22 0 6px, #1d361b 6px 12px);
 }
@@ -580,6 +648,18 @@ h2 {
   cursor: help;
 }
 
+.tactical-shell.is-map-editing .map-tile {
+  cursor: crosshair;
+}
+
+.map-tile.editor-tile::before {
+  box-shadow: inset 0 0 0 2px rgba(229, 177, 75, 0.48), inset 0 0 13px rgba(229, 177, 75, 0.22);
+}
+
+.map-tile.editor-anchor::before {
+  box-shadow: inset 0 0 0 4px #e53bdc, inset 0 0 18px rgba(229, 59, 220, 0.82);
+}
+
 .tile-property-tooltip {
   position: fixed;
   z-index: 30;
@@ -646,8 +726,13 @@ h2 {
   pointer-events: none;
 }
 
-.unit-token.player::after {
+.unit-token.player::after,
+.unit-token.player-b::after {
   box-shadow: inset 0 0 0 3px var(--blue), inset 0 -10px 12px rgba(0, 0, 0, 0.55), 0 0 10px var(--blue);
+}
+
+.unit-token.player-b::after {
+  box-shadow: inset 0 0 0 3px #76d7b8, inset 0 -10px 12px rgba(0, 0, 0, 0.55), 0 0 10px #76d7b8;
 }
 
 .unit-token.enemy::after {
@@ -699,6 +784,12 @@ h2 {
 .legend-swatch.bush { background: #365328; }
 .legend-swatch.energy { background: #21698c; }
 .legend-swatch.objective { background: #804025; }
+.legend-swatch.wall { background: #4f4c48; }
+.legend-swatch.thin-wall {
+  background:
+    linear-gradient(135deg, transparent 42%, #080604 43% 57%, transparent 58%),
+    #32302d;
+}
 
 .enemy-panel {
   min-width: 0;
@@ -706,6 +797,31 @@ h2 {
   display: grid;
   align-content: start;
   gap: 10px;
+}
+
+.side-brand {
+  min-width: 0;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--bronze-dark);
+  background: linear-gradient(90deg, rgba(40, 26, 12, 0.76), rgba(9, 8, 6, 0.88));
+  box-shadow: inset 0 0 9px #000;
+}
+
+.side-brand h1 {
+  min-width: 0;
+  overflow: hidden;
+  font-size: clamp(23px, 2.3vw, 34px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-brand .prototype-label {
+  flex: 0 0 auto;
+  font-size: 10px;
 }
 
 .enemy-team-cards {
@@ -773,6 +889,20 @@ h2 {
 .enemy-team-member.is-out {
   opacity: 0.48;
   filter: grayscale(1);
+}
+
+.enemy-team-member.is-concealed {
+  border-color: #3f4936;
+  color: #a9b29e;
+  background:
+    repeating-linear-gradient(135deg, rgba(50, 69, 43, 0.32) 0 7px, rgba(8, 10, 8, 0.78) 7px 14px),
+    #090b08;
+  box-shadow: inset 0 0 14px #000;
+}
+
+.enemy-team-member.is-concealed .enemy-team-identity strong,
+.enemy-team-member.is-concealed .enemy-team-state {
+  color: #9aaa8d;
 }
 
 .enemy-team-avatar {
@@ -865,6 +995,31 @@ h2 {
 .enemy-combatant.is-targeted {
   border-color: var(--gold);
   box-shadow: 0 0 0 1px #080604, 0 0 0 3px #7d581f, inset 0 0 0 1px #f6d47d, inset 0 0 18px rgba(122, 76, 17, 0.34), 5px 6px 0 rgba(0, 0, 0, 0.55);
+}
+
+.combatant-card.is-concealed {
+  border-color: #43523b;
+  background:
+    repeating-linear-gradient(135deg, rgba(43, 61, 38, 0.2) 0 12px, rgba(7, 9, 7, 0.72) 12px 24px),
+    #090a08;
+  box-shadow: 0 0 0 1px #080604, inset 0 0 28px #000, 5px 6px 0 rgba(0, 0, 0, 0.55);
+}
+
+.combatant-card.is-concealed::after {
+  background: linear-gradient(90deg, #293424, #607553, #293424);
+}
+
+.combatant-card.is-concealed .combatant-name,
+.combatant-card.is-concealed .stat-value {
+  color: #91a486;
+}
+
+.concealed-avatar {
+  color: #9cad90;
+  border-color: #42513a;
+  background: #0b100a;
+  cursor: default;
+  filter: grayscale(1);
 }
 
 .player-combatant {
@@ -1003,25 +1158,77 @@ h2 {
   font-size: 10px;
 }
 
+.log-head-actions {
+  display: flex;
+  gap: 5px;
+}
+
 #tacticalLog {
-  max-height: 190px;
+  height: 82px;
+  max-height: 82px;
   margin: 0;
   padding: 0;
   display: grid;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
   gap: 4px;
-  overflow: auto;
+  overflow: hidden;
   list-style: none;
-  scrollbar-color: var(--bronze) #0b0907;
 }
 
 #tacticalLog li {
-  padding: 6px 7px;
+  min-width: 0;
+  padding: 5px 7px;
+  overflow: hidden;
   border-left: 3px solid #6d5a41;
   color: var(--muted);
   background: rgba(5, 4, 3, 0.72);
   font-size: 10px;
-  line-height: 1.35;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   box-shadow: inset 0 -1px 0 rgba(139, 96, 52, 0.17);
+}
+
+#tacticalLog .log-empty {
+  grid-row: 1 / -1;
+  display: grid;
+  place-items: center;
+  border-left-color: var(--bronze-dark);
+  color: #756a5a;
+}
+
+.side-match-panel {
+  padding-top: 8px;
+  display: grid;
+  gap: 8px;
+  border-top: 2px solid var(--bronze-dark);
+}
+
+.side-match-panel .match-status {
+  justify-content: flex-start;
+  padding: 0;
+  gap: 7px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.side-match-panel .phase-chip {
+  font-size: 11px;
+}
+
+.side-match-panel .top-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0;
+  border-left: 0;
+}
+
+.side-match-panel .top-controls button {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 6px;
+  font-size: 10px;
 }
 
 #tacticalLog li::first-letter {
@@ -1063,6 +1270,89 @@ h2 {
   align-items: start;
 }
 
+.player-team-dock {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.player-team-overview {
+  padding: 7px;
+  border: 1px solid #315e77;
+  background: linear-gradient(180deg, rgba(24, 55, 70, 0.86), rgba(7, 16, 22, 0.94));
+  box-shadow: inset 0 0 12px #000;
+}
+
+.player-team-heading {
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+  gap: 7px;
+  color: #d9f1ff;
+  font-size: 9px;
+}
+
+.player-team-heading span {
+  color: #78bfe9;
+}
+
+.player-team-members {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.player-team-member {
+  min-width: 0;
+  min-height: 54px;
+  padding: 5px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  border-color: #315e77;
+  text-align: left;
+  background: rgba(7, 22, 30, 0.88);
+}
+
+.player-team-member .combatant-avatar {
+  width: 38px;
+  height: 38px;
+}
+
+.player-team-member.is-active {
+  border-color: #68c6f2;
+  box-shadow: inset 0 0 0 1px #9be1ff, 0 0 8px rgba(66, 176, 226, 0.35);
+}
+
+.player-team-member.is-locked {
+  border-color: #6a8b54;
+  background: rgba(21, 47, 24, 0.85);
+}
+
+.player-team-member.is-out {
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+
+.player-team-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.player-team-copy strong,
+.player-team-copy span,
+.player-team-copy em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-team-copy strong { color: #e9f8ff; font-size: 10px; }
+.player-team-copy span { color: #b8d4df; font-size: 8px; }
+.player-team-copy em { color: #6fc6ee; font-size: 8px; font-style: normal; }
+
 .tactical-bottom .combatant-card {
   min-height: 190px;
 }
@@ -1088,6 +1378,28 @@ h2 {
   gap: 4px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.battle-mage-toggle {
+  flex: 0 0 auto;
+  min-height: 38px;
+  min-width: 62px;
+  padding: 0 12px;
+  border-color: #b74720;
+  color: #ffd98b;
+  background:
+    linear-gradient(145deg, rgba(74, 18, 9, 0.96), rgba(18, 8, 5, 0.98)),
+    radial-gradient(circle at 50% 35%, rgba(255, 122, 38, 0.45), transparent 58%);
+  box-shadow: inset 0 0 0 1px rgba(255, 208, 119, 0.24), 0 0 10px rgba(210, 65, 23, 0.22);
+}
+
+.battle-mage-toggle[aria-pressed="true"] {
+  color: #fff7cf;
+  border-color: #ffd05f;
+  background:
+    linear-gradient(145deg, rgba(154, 46, 14, 0.98), rgba(63, 12, 7, 0.98)),
+    radial-gradient(circle at 50% 35%, rgba(255, 194, 71, 0.72), transparent 62%);
+  box-shadow: inset 0 0 0 1px rgba(255, 238, 175, 0.46), 0 0 14px rgba(255, 128, 40, 0.56);
 }
 
 .action-filters button {
@@ -1381,7 +1693,7 @@ h2 {
 
 .setup-mode {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: end;
   gap: 4px;
 }
@@ -1399,7 +1711,7 @@ h2 {
 .spawn-settings {
   grid-column: 1 / -2;
   display: grid;
-  grid-template-columns: auto repeat(3, minmax(105px, 1fr)) auto;
+  grid-template-columns: auto repeat(4, minmax(105px, 1fr)) auto;
   gap: 7px;
   align-items: end;
   padding-top: 7px;
@@ -1460,6 +1772,85 @@ h2 {
   min-height: 36px;
 }
 
+#tacticalMapEditorBtn {
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+#tacticalMapEditorBtn[aria-pressed="true"] {
+  color: #fff2c8;
+  border-color: #e0ae55;
+  background: linear-gradient(#76521e, #2e1b0c);
+  box-shadow: inset 0 0 0 2px #39210e, inset 0 1px 0 #f7d382, 3px 3px 0 #050403;
+}
+
+.map-editor-panel {
+  grid-column: 1 / -1;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: minmax(150px, 0.75fr) minmax(270px, 1fr) minmax(260px, 1.4fr) auto;
+  gap: 9px;
+  align-items: center;
+  border: 1px solid rgba(224, 174, 85, 0.64);
+  background:
+    linear-gradient(rgba(40, 33, 17, 0.72), rgba(12, 10, 8, 0.9)),
+    radial-gradient(circle at 20% 0, rgba(229, 177, 75, 0.18), transparent 42%);
+  box-shadow: inset 0 0 0 1px #2c1b0e, inset 0 0 22px rgba(0, 0, 0, 0.45);
+}
+
+.map-editor-head {
+  display: grid;
+  gap: 4px;
+}
+
+.map-editor-head strong {
+  color: var(--gold);
+  font-size: 13px;
+}
+
+.map-editor-head span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.map-editor-tools,
+.map-library-controls,
+.map-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.map-library-controls {
+  align-items: end;
+}
+
+.map-library-controls label {
+  flex: 1 1 116px;
+}
+
+.map-library-controls button {
+  flex: 0 0 auto;
+}
+
+.map-editor-tools button,
+.map-library-controls button,
+.map-editor-actions button {
+  min-height: 34px;
+  padding-inline: 10px;
+}
+
+.map-editor-tools button[aria-pressed="true"] {
+  color: #fff2c8;
+  border-color: #e0ae55;
+  background: linear-gradient(#76521e, #2e1b0c);
+}
+
+.map-editor-actions {
+  justify-content: flex-end;
+}
+
 .apply-setup {
   grid-column: -2 / -1;
   grid-row: 2;
@@ -1474,6 +1865,43 @@ h2 {
   gap: 4px;
   color: var(--muted);
   font-size: 9px;
+}
+
+.scoring-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.scoring-settings-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--parchment);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.scoring-settings-grid input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--bronze);
+  color: #fff2c8;
+  background: #0b0907;
+  font: inherit;
+}
+
+.scoring-settings-summary {
+  color: var(--blue);
+  font-weight: 900;
+}
+
+.scoring-settings-apply {
+  width: 100%;
+  min-height: 44px;
+  color: #fff2c8;
+  border-color: #d0a24f;
+  background: linear-gradient(#77501f, #35210f);
 }
 
 .setup-strip input,
@@ -1652,6 +2080,31 @@ h2 {
   padding-left: 20px;
 }
 
+.tactical-full-log-summary {
+  margin-bottom: 10px;
+}
+
+.tactical-full-log {
+  max-height: min(60vh, 560px);
+  margin: 0;
+  padding: 0 4px 0 0;
+  display: grid;
+  gap: 5px;
+  overflow: auto;
+  list-style: none;
+  scrollbar-color: var(--bronze-light) #0b0907;
+}
+
+.tactical-full-log li {
+  padding: 8px 10px;
+  border-left: 3px solid #6d5a41;
+  color: var(--muted);
+  background: rgba(5, 4, 3, 0.76);
+  font-size: 11px;
+  line-height: 1.5;
+  box-shadow: inset 0 -1px 0 rgba(139, 96, 52, 0.2);
+}
+
 .card-shake {
   animation: tacticalShake 0.28s steps(2) 2;
 }
@@ -1773,7 +2226,19 @@ h2 {
   }
 
   #tacticalLog {
-    max-height: 150px;
+    max-height: 118px;
+  }
+
+  .side-brand {
+    padding: 7px 8px;
+  }
+
+  .side-brand h1 {
+    font-size: clamp(21px, 2vw, 30px);
+  }
+
+  .side-match-panel {
+    gap: 6px;
   }
 
   .tactical-bottom {
@@ -1945,7 +2410,7 @@ h2 {
   }
 
   .spawn-settings {
-    grid-template-columns: auto repeat(3, minmax(100px, 1fr)) auto;
+    grid-template-columns: auto repeat(4, minmax(100px, 1fr)) auto;
     padding-top: 5px;
   }
 
@@ -1993,6 +2458,13 @@ h2 {
     grid-template-columns: minmax(220px, 1fr) minmax(0, 1.35fr);
   }
 
+  .side-brand,
+  .enemy-team-overview,
+  .side-match-panel,
+  .legacy-mode-note {
+    grid-column: 1 / -1;
+  }
+
   .legacy-mode-note {
     display: none;
   }
@@ -2019,6 +2491,7 @@ h2 {
 
   .setup-mode,
   .spawn-settings,
+  .map-editor-panel,
   .apply-setup {
     grid-column: 1 / -1;
   }
@@ -2028,7 +2501,7 @@ h2 {
   }
 
   .spawn-settings {
-    grid-template-columns: auto repeat(3, minmax(90px, 1fr)) auto;
+    grid-template-columns: auto repeat(4, minmax(90px, 1fr)) auto;
   }
 
   .room-settings {
@@ -2037,6 +2510,18 @@ h2 {
 
   .room-settings strong {
     grid-column: 1 / -1;
+  }
+
+  .map-editor-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .map-editor-actions {
+    justify-content: stretch;
+  }
+
+  .map-editor-actions button {
+    flex: 1 1 110px;
   }
 }
 
@@ -2136,7 +2621,19 @@ h2 {
   }
 
   .enemy-panel .tactical-log-panel {
-    display: none;
+    display: block;
+  }
+
+  #tacticalLog {
+    max-height: 96px;
+  }
+
+  .side-brand h1 {
+    font-size: 24px;
+  }
+
+  .side-match-panel .top-controls {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .tactical-bottom {
@@ -2223,6 +2720,11 @@ h2 {
     grid-column: 1 / -1;
   }
 
+  #tacticalMapEditorBtn,
+  .map-editor-panel {
+    grid-column: 1 / -1;
+  }
+
   .spawn-settings {
     grid-template-columns: 1fr 1fr;
   }
@@ -2257,6 +2759,15 @@ h2 {
     min-height: 34px;
   }
 
+  .map-editor-tools button,
+  .map-editor-actions button {
+    flex: 1 1 86px;
+  }
+
+  .scoring-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
   .plan-preview {
     grid-template-columns: 1fr;
     gap: 3px;
@@ -2288,5 +2799,771 @@ h2 {
   .tactical-modal p,
   .tactical-modal li {
     font-size: 12px;
+  }
+}
+
+/* Latest tactical polish: loadouts, card paging, and contested movement hints. */
+.map-tile.reachable.reachable-toll::before {
+  box-shadow: inset 0 0 0 3px var(--gold), inset 0 0 18px rgba(237, 194, 77, 0.82);
+}
+
+.map-tile.reachable.reachable-toll-2::before {
+  box-shadow: inset 0 0 0 3px #f08a32, inset 0 0 18px rgba(240, 138, 50, 0.9);
+}
+
+.map-tile.reachable.reachable-toll-3::before {
+  box-shadow: inset 0 0 0 3px #e04f39, inset 0 0 20px rgba(224, 79, 57, 0.92);
+}
+
+.tactical-pharmacist-loadout {
+  grid-column: 1 / -1;
+  padding: 10px;
+  border: 1px solid rgba(215, 164, 73, 0.74);
+  background: linear-gradient(rgba(45, 39, 18, 0.72), rgba(13, 11, 8, 0.92));
+  box-shadow: inset 0 0 0 1px rgba(255, 224, 130, 0.16);
+}
+
+.loadout-heading {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.loadout-heading span {
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+.loadout-heading strong {
+  color: var(--muted);
+  font-size: 10px;
+  text-align: right;
+}
+
+.loadout-heading button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.tactical-loadout-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tactical-loadout-card {
+  min-height: 94px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  text-align: left;
+  border-color: rgba(112, 85, 48, 0.95);
+  color: var(--muted);
+  background: rgba(20, 27, 19, 0.84);
+}
+
+.tactical-loadout-card strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.tactical-loadout-card span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.tactical-loadout-card.is-selected {
+  border-color: var(--gold);
+  color: var(--text);
+  background: linear-gradient(rgba(80, 66, 26, 0.86), rgba(31, 34, 18, 0.94));
+  box-shadow: inset 0 0 0 1px rgba(255, 227, 133, 0.24), 0 0 12px rgba(221, 176, 72, 0.32);
+}
+
+.loadout-confirm {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 10px;
+  color: #fff2bf;
+  border-color: var(--gold);
+  background: linear-gradient(#76521e, #21160b);
+  font-weight: 1000;
+  box-shadow: inset 0 0 0 1px #120b05, 0 0 12px rgba(229, 189, 107, 0.36), 2px 2px 0 #050403;
+}
+
+.loadout-confirm:disabled {
+  color: #8c826e;
+  border-color: #5f5749;
+  background: rgba(20, 18, 14, 0.88);
+  box-shadow: inset 0 0 0 1px #0b0907;
+}
+
+.tactical-cards,
+.tactical-cards.has-many-actions {
+  min-height: 0;
+  height: min(224px, max(172px, 23vh));
+  max-height: none;
+  padding: 14px 10px 18px;
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-template-rows: minmax(0, 1fr);
+  grid-auto-columns: clamp(230px, 18vw, 310px);
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 10px;
+  scrollbar-color: var(--bronze-light) #0c0907;
+}
+
+.tactical-card {
+  scroll-snap-align: start;
+}
+
+.tactical-card .card-title {
+  font-size: 17px;
+}
+
+.tactical-card .card-group,
+.tactical-card .card-text,
+.tactical-card .card-target {
+  font-size: 11px;
+  line-height: 1.28;
+}
+
+.tactical-card .card-specs {
+  gap: 5px;
+}
+
+.tactical-card .card-specs span {
+  min-height: 24px;
+}
+
+@media (min-width: 900px) and (orientation: landscape) {
+  .tactical-cards,
+  .tactical-cards.has-many-actions {
+    height: min(206px, max(166px, 22vh));
+    grid-template-rows: minmax(0, 1fr);
+    grid-auto-columns: clamp(220px, 18vw, 300px);
+  }
+}
+
+@media (max-width: 900px) {
+  .tactical-loadout-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tactical-cards,
+  .tactical-cards.has-many-actions {
+    height: 186px;
+    grid-template-rows: minmax(0, 1fr);
+    grid-auto-columns: minmax(178px, 230px);
+  }
+}
+
+@media (max-width: 620px) {
+  .tactical-loadout-options {
+    grid-template-columns: 1fr;
+  }
+
+  .tactical-cards,
+  .tactical-cards.has-many-actions {
+    height: 174px;
+    grid-template-rows: 1fr;
+    grid-auto-columns: minmax(164px, 74vw);
+  }
+}
+
+.tactical-cards.is-loadout,
+.tactical-cards.is-loadout.has-many-actions {
+  display: block;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  padding: 12px;
+  overflow: visible;
+  scroll-snap-type: none;
+}
+
+.tactical-loadout-dock {
+  width: 100%;
+}
+
+.tactical-loadout-dock .loadout-heading {
+  grid-template-columns: auto 1fr;
+}
+
+.tactical-loadout-dock .loadout-hint {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.tactical-loadout-card:hover:not(:disabled),
+.tactical-loadout-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: #f0c971;
+  box-shadow: inset 0 0 0 1px rgba(255, 227, 133, 0.2), 0 0 14px rgba(221, 176, 72, 0.28);
+}
+
+/* Compact battlefield layout, integrated spawn editing, and portrait action cards. */
+.spawn-settings[hidden] {
+  display: none !important;
+}
+
+.spawn-point-marker {
+  position: absolute;
+  z-index: 7;
+  inset: 22% 10%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid currentColor;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  color: #d8f3ff;
+  background: rgba(12, 35, 49, 0.9);
+  font-size: clamp(8px, 0.75vw, 11px);
+  font-weight: 1000;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 1px 1px 0 #000;
+  box-shadow: inset 0 0 12px #000, 0 0 10px currentColor;
+  pointer-events: none;
+}
+
+.spawn-point-marker.player-a { color: #67c7ff; }
+.spawn-point-marker.player-b { color: #76d7b8; }
+.spawn-point-marker.enemy-a { color: #f06a50; background-color: rgba(57, 19, 14, 0.9); }
+.spawn-point-marker.enemy-b { color: #e6a04c; background-color: rgba(57, 34, 12, 0.9); }
+
+.tactical-cards,
+.tactical-cards.has-many-actions {
+  height: clamp(252px, 27vh, 292px);
+  padding: 15px 10px 18px;
+  grid-template-rows: minmax(0, 1fr);
+  grid-auto-columns: clamp(138px, 10.5vw, 166px);
+  gap: 11px;
+}
+
+.tactical-card {
+  width: 100%;
+  height: 100%;
+  padding: 14px 11px 11px;
+  grid-template-rows: auto auto auto minmax(48px, 1fr) auto;
+  gap: 7px;
+}
+
+.tactical-card .card-top {
+  min-height: 34px;
+  padding-right: 38px;
+}
+
+.tactical-card .card-title {
+  font-size: clamp(17px, 1.2vw, 20px);
+  line-height: 1.12;
+}
+
+.tactical-card .card-cost {
+  position: absolute;
+  z-index: 4;
+  top: -9px;
+  right: -8px;
+  min-width: 42px;
+  min-height: 46px;
+  margin: 0;
+  padding: 5px 5px 3px;
+  border-width: 3px;
+  border-color: #b7e1ff;
+  background: linear-gradient(#267bb6, #103f6b);
+  font-size: 20px;
+  line-height: 0.95;
+  box-shadow: inset 0 0 7px #071c31, 2px 3px 0 #000, 0 0 10px rgba(84, 184, 255, 0.48);
+}
+
+.tactical-card .card-cost::after {
+  margin-top: 2px;
+  font-size: 7px;
+}
+
+.tactical-card .card-group {
+  padding: 3px 5px;
+  font-size: 9px;
+}
+
+.tactical-card .card-specs {
+  gap: 5px;
+}
+
+.tactical-card .card-specs span {
+  min-height: 34px;
+  padding: 5px;
+}
+
+.tactical-card .card-specs b {
+  font-size: 8px;
+}
+
+.tactical-card .card-specs strong {
+  font-size: 13px;
+}
+
+.tactical-card .card-text {
+  font-size: 10px;
+  line-height: 1.42;
+  -webkit-line-clamp: 4;
+}
+
+.tactical-card .card-target {
+  min-height: 29px;
+  padding: 5px;
+  display: grid;
+  align-items: center;
+  font-size: 9px;
+  line-height: 1.28;
+}
+
+.plan-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.plan-panel .plan-controls {
+  margin-top: auto;
+}
+
+@media (min-width: 900px) and (orientation: landscape) {
+  .tactical-main,
+  .tactical-bottom {
+    align-items: stretch;
+  }
+
+  .map-panel,
+  .enemy-panel,
+  .player-team-dock,
+  .action-dock,
+  .plan-panel {
+    height: 100%;
+    align-self: stretch;
+  }
+
+  .player-team-dock {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .player-team-dock .combatant-card {
+    height: 100%;
+  }
+
+  .tactical-map {
+    --hex-height: clamp(70px, calc((100dvh - 335px) / 6.25), 98px);
+    --hex-width: clamp(61px, calc((100dvh - 335px) / 7.1), 86px);
+    width: min(100%, 940px);
+  }
+
+  .enemy-panel {
+    align-content: stretch;
+    grid-template-rows: auto auto auto minmax(88px, 1fr) auto;
+  }
+
+  .enemy-panel .tactical-log-panel {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .enemy-panel #tacticalLog {
+    flex: 1 1 auto;
+    max-height: none;
+  }
+
+  .tactical-cards,
+  .tactical-cards.has-many-actions {
+    height: clamp(252px, 27vh, 286px);
+    grid-auto-columns: clamp(138px, 10.5vw, 164px);
+  }
+}
+
+@media (max-width: 899px) {
+  .tactical-cards,
+  .tactical-cards.has-many-actions {
+    height: 248px;
+    grid-auto-columns: minmax(138px, 158px);
+  }
+}
+
+@media (max-width: 620px) {
+  .tactical-cards,
+  .tactical-cards.has-many-actions {
+    height: 236px;
+    grid-auto-columns: minmax(132px, 46vw);
+  }
+
+  .tactical-card {
+    padding: 12px 9px 9px;
+  }
+
+  .tactical-card .card-title {
+    font-size: 16px;
+  }
+
+  .tactical-card .card-cost {
+    min-width: 38px;
+    min-height: 42px;
+    font-size: 18px;
+  }
+}
+
+/* Final cascade guard: the sidebar only shows the three-line battle summary. */
+.enemy-panel #tacticalLog {
+  flex: 0 0 82px;
+  min-height: 82px;
+  height: 82px;
+  max-height: 82px;
+}
+
+@media (min-width: 960px) and (max-height: 1120px) {
+  body {
+    overflow: hidden;
+  }
+
+  .tactical-shell {
+    width: min(100vw - 12px, 1540px);
+    height: 100dvh;
+    padding: 6px 0 8px;
+    gap: 6px;
+    grid-template-rows: minmax(0, 1fr) minmax(170px, 230px) auto;
+  }
+
+  .tactical-main {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) clamp(282px, 21vw, 318px);
+    gap: 6px;
+  }
+
+  .map-panel {
+    min-height: 0;
+    padding: 8px 11px 7px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .map-heading {
+    min-height: 30px;
+    margin-bottom: 5px;
+  }
+
+  .map-heading h2 {
+    font-size: 16px;
+  }
+
+  .map-heading p {
+    max-width: 390px;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .tactical-map {
+    --hex-height: clamp(52px, calc((100dvh - 360px) / 7.1), 78px);
+    --hex-width: clamp(46px, calc((100dvh - 360px) / 8.1), 68px);
+    --hex-label: 18px;
+    width: min(100%, 850px);
+    padding: 6px 7px 8px;
+  }
+
+  .hex-column-labels {
+    height: 14px;
+    font-size: 8px;
+  }
+
+  .hex-row-label {
+    font-size: 8px;
+  }
+
+  .terrain-legend {
+    margin-top: 5px;
+    gap: 8px;
+    font-size: 8px;
+  }
+
+  .legend-swatch {
+    width: 9px;
+    height: 9px;
+  }
+
+  .enemy-panel {
+    min-height: 0;
+    padding: 8px;
+    gap: 6px;
+    align-content: stretch;
+  }
+
+  .side-brand {
+    padding: 6px 8px;
+  }
+
+  .side-brand h1 {
+    font-size: 24px;
+  }
+
+  .enemy-team-cards {
+    gap: 6px;
+  }
+
+  .combatant-card {
+    min-height: 128px;
+    padding: 9px;
+  }
+
+  .combatant-top {
+    grid-template-columns: minmax(0, 1fr) 60px;
+    gap: 7px;
+  }
+
+  .combatant-avatar {
+    width: 60px;
+    height: 60px;
+    border-width: 2px;
+  }
+
+  .combatant-name {
+    font-size: 18px;
+  }
+
+  .combatant-role {
+    margin-bottom: 3px;
+    font-size: 9px;
+  }
+
+  .combatant-stats {
+    margin-top: 7px;
+    gap: 4px;
+  }
+
+  .stat-line {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 5px;
+    font-size: 12px;
+  }
+
+  .status-list {
+    margin-top: 7px;
+    gap: 4px;
+  }
+
+  .status-pill {
+    padding: 3px 5px;
+    font-size: 8px;
+  }
+
+  .section-head {
+    margin-bottom: 5px;
+  }
+
+  .side-match-panel {
+    padding-top: 6px;
+    gap: 6px;
+  }
+
+  .side-match-panel .top-controls button {
+    min-height: 30px;
+    font-size: 9px;
+  }
+
+  .tactical-bottom {
+    min-height: 0;
+    grid-template-columns: clamp(210px, 18vw, 245px) minmax(0, 1fr) clamp(220px, 18vw, 260px);
+    gap: 6px;
+  }
+
+  .tactical-bottom .combatant-card {
+    min-height: 156px;
+  }
+
+  .player-team-overview {
+    padding: 5px;
+  }
+
+  .player-team-member {
+    min-height: 44px;
+    grid-template-columns: 30px minmax(0, 1fr);
+    padding: 4px;
+  }
+
+  .player-team-member .combatant-avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .action-dock,
+  .plan-panel {
+    padding: 8px;
+  }
+
+  .action-dock-head {
+    margin-bottom: 6px;
+  }
+
+  .action-dock h2,
+  .plan-panel h2 {
+    font-size: 13px;
+  }
+
+  .action-filters button {
+    min-height: 24px;
+    padding: 0 6px;
+    font-size: 8px;
+  }
+
+  .tactical-cards,
+  .tactical-cards.has-many-actions {
+    height: clamp(152px, 18dvh, 205px);
+    min-height: 150px;
+    max-height: 205px;
+    padding: 9px 7px 11px;
+    grid-auto-columns: clamp(118px, 8.8vw, 145px);
+    gap: 8px;
+  }
+
+  .tactical-card {
+    padding: 10px 8px 8px;
+    gap: 4px;
+  }
+
+  .tactical-card .card-title {
+    font-size: 15px;
+  }
+
+  .tactical-card .card-cost {
+    min-width: 36px;
+    min-height: 39px;
+    font-size: 17px;
+  }
+
+  .tactical-card .card-specs span {
+    min-height: 28px;
+    padding: 4px;
+  }
+
+  .tactical-card .card-text {
+    font-size: 9px;
+    -webkit-line-clamp: 3;
+  }
+
+  .plan-preview {
+    margin: 7px 0;
+    gap: 3px;
+  }
+
+  .plan-preview div {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 5px;
+    padding-bottom: 2px;
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .plan-controls {
+    gap: 5px;
+  }
+
+  .plan-controls button {
+    min-height: 34px;
+    font-size: 12px;
+  }
+
+  .setup-strip {
+    padding: 7px;
+    gap: 6px;
+    grid-template-columns: minmax(250px, auto) minmax(120px, 0.7fr) repeat(3, minmax(110px, 1fr)) auto;
+    max-height: 142px;
+    overflow: auto;
+  }
+
+  .setup-mode {
+    grid-template-columns: repeat(5, minmax(50px, 1fr));
+  }
+
+  .setup-mode button,
+  #tacticalMapEditorBtn,
+  .apply-setup,
+  .room-settings button {
+    min-height: 30px;
+    padding-inline: 7px;
+    font-size: 9px;
+  }
+
+  .setup-strip input,
+  .setup-strip select {
+    min-height: 30px;
+    font-size: 9px;
+  }
+
+  .room-settings {
+    grid-template-columns: auto auto minmax(110px, 0.65fr) auto minmax(170px, 1fr);
+    gap: 5px;
+    padding-top: 5px;
+  }
+
+  .room-settings strong {
+    min-height: 30px;
+    padding: 6px 7px;
+  }
+
+  .map-editor-panel {
+    padding: 7px;
+    grid-template-columns: minmax(130px, 0.55fr) minmax(240px, 0.9fr) minmax(280px, 1.2fr) auto;
+    gap: 6px;
+  }
+
+  .map-editor-head span {
+    font-size: 9px;
+  }
+
+  .map-editor-tools,
+  .map-library-controls,
+  .map-editor-actions {
+    gap: 4px;
+  }
+
+  .map-editor-tools button,
+  .map-library-controls button,
+  .map-editor-actions button {
+    min-height: 28px;
+    padding-inline: 7px;
+    font-size: 8px;
+  }
+}
+
+@media (min-width: 960px) and (max-height: 900px) {
+  .tactical-shell {
+    grid-template-rows: minmax(0, 1fr) minmax(150px, 196px) auto;
+  }
+
+  .tactical-map {
+    --hex-height: clamp(46px, calc((100dvh - 320px) / 7.35), 66px);
+    --hex-width: clamp(41px, calc((100dvh - 320px) / 8.35), 58px);
+  }
+
+  .tactical-cards,
+  .tactical-cards.has-many-actions {
+    height: clamp(138px, 17dvh, 178px);
+    min-height: 138px;
+  }
+
+  .combatant-card {
+    min-height: 116px;
+  }
+
+  .tactical-bottom .combatant-card {
+    min-height: 136px;
   }
 }

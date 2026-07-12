@@ -8,23 +8,6 @@
   </head>
   <body>
     <main id="tacticalShell" class="tactical-shell" data-phase="movement">
-      <header class="tactical-topbar">
-        <div class="brand-lockup">
-          <h1>Projekt Ji</h1>
-          <span id="tacticalModeLabel" class="prototype-label">1v1 战术</span>
-        </div>
-        <div class="match-status" aria-live="polite">
-          <span id="tacticalRound">第 1 回合</span>
-          <span id="tacticalPhase" class="phase-chip">计划阶段</span>
-          <span id="tacticalScore">据点分 0 : 0</span>
-        </div>
-        <div class="top-controls">
-          <button id="tacticalManualBtn" type="button">说明书</button>
-          <button id="tacticalHistoryBtn" type="button">历史对局</button>
-          <button id="tacticalResetBtn" type="button">重开</button>
-        </div>
-      </header>
-
       <section class="tactical-main" aria-label="地图战术对局">
         <section class="map-panel" aria-label="8乘8战术地图">
           <div class="map-heading">
@@ -37,21 +20,46 @@
           <div id="tacticalMap" class="tactical-map" role="grid" aria-label="8乘8战术地图"></div>
           <div class="terrain-legend" aria-label="地形图例">
             <span><i class="legend-swatch floor"></i>地面</span>
-            <span><i class="legend-swatch bush"></i>草丛</span>
+            <span><i class="legend-swatch bush"></i>草丛 · 隐形</span>
             <span><i class="legend-swatch energy"></i>能量点 +1 XP</span>
             <span><i class="legend-swatch objective"></i>中央据点</span>
+            <span><i class="legend-swatch thin-wall"></i>薄墙</span>
+            <span><i class="legend-swatch wall"></i>巨石</span>
           </div>
         </section>
 
         <aside class="enemy-panel" aria-label="敌方状态与战斗日志">
+          <section class="side-brand" aria-label="游戏标题">
+            <h1>Projekt Ji</h1>
+            <span id="tacticalModeLabel" class="prototype-label">1v1 战术</span>
+          </section>
           <section id="enemyTeamOverview" class="enemy-team-overview" aria-label="敌方小队概览" hidden></section>
           <div class="enemy-team-cards" aria-label="敌方小队">
             <div id="enemyTacticalCard" class="combatant-card enemy-combatant"></div>
             <div id="enemyBTacticalCard" class="combatant-card enemy-combatant" hidden></div>
           </div>
-          <section class="tactical-log-panel" aria-label="战斗日志">
-            <div class="section-head"><h2>战斗日志</h2><button id="tacticalClearLog" type="button">清空</button></div>
+          <section class="tactical-log-panel" aria-label="战斗摘要">
+            <div class="section-head">
+              <h2>战斗摘要</h2>
+              <div class="log-head-actions">
+                <button id="tacticalExpandLog" type="button">展开</button>
+                <button id="tacticalClearLog" type="button">清空</button>
+              </div>
+            </div>
             <ol id="tacticalLog" aria-live="polite"></ol>
+          </section>
+          <section class="side-match-panel" aria-label="对局状态">
+            <div class="match-status" aria-live="polite">
+              <span id="tacticalRound">第 1 回合</span>
+              <span id="tacticalPhase" class="phase-chip">计划阶段</span>
+              <span id="tacticalScore">据点分 0 : 0</span>
+            </div>
+            <div class="top-controls">
+              <button id="tacticalScoringBtn" type="button">计分规则</button>
+              <button id="tacticalManualBtn" type="button">说明书</button>
+              <button id="tacticalHistoryBtn" type="button">历史对局</button>
+              <button id="tacticalResetBtn" type="button">重开</button>
+            </div>
           </section>
           <section class="legacy-mode-note" aria-label="旧版模式状态">
             <strong>在线房间</strong>
@@ -61,7 +69,10 @@
       </section>
 
       <section class="tactical-bottom" aria-label="计划操作台">
-        <section id="playerTacticalCard" class="combatant-card player-combatant" aria-label="玩家状态"></section>
+        <div class="player-team-dock">
+          <section id="playerTeamOverview" class="player-team-overview" aria-label="己方小队" hidden></section>
+          <section id="playerTacticalCard" class="combatant-card player-combatant" aria-label="玩家状态"></section>
+        </div>
 
         <section class="action-dock" aria-label="行动卡">
           <div class="action-dock-head">
@@ -69,6 +80,7 @@
               <span class="eyebrow">行动卡</span>
               <h2>选择本回合动作</h2>
             </div>
+            <button id="battleMageImprintBtn" class="battle-mage-toggle" type="button" aria-pressed="false" hidden>表</button>
             <div id="actionFilters" class="action-filters" role="group" aria-label="行动类别筛选">
               <button type="button" data-filter="available" aria-pressed="true">当前可用</button>
               <button type="button" data-filter="charge" aria-pressed="false">蓄气</button>
@@ -98,18 +110,52 @@
           <span>模式</span>
           <button id="tacticalDuelMode" type="button" data-battle-mode="duel" aria-pressed="true">1v1</button>
           <button id="tacticalTrioMode" type="button" data-battle-mode="trio" aria-pressed="false">1v2</button>
+          <button id="tacticalTeamMode" type="button" data-battle-mode="team" aria-pressed="false">2v2</button>
           <button id="tacticalOnlineMode" type="button" data-battle-mode="online" aria-pressed="false">在线 1v1</button>
+          <button id="tacticalOnlineTeamMode" type="button" data-battle-mode="online-team" aria-pressed="false">在线 2v2</button>
         </div>
         <label>玩家昵称<input id="tacticalPlayerName" maxlength="16" autocomplete="nickname" /></label>
-        <label>你的英雄<select id="tacticalPlayerHero"></select></label>
+        <label>你的英雄 A<select id="tacticalPlayerHero"></select></label>
+        <label class="player-b-setting" hidden>你的英雄 B<select id="tacticalPlayerBHero"></select></label>
         <label>电脑 A<select id="tacticalEnemyHero"></select></label>
         <label class="enemy-b-setting" hidden>电脑 B<select id="tacticalEnemyBHero"></select></label>
-        <div id="tacticalSpawnSettings" class="spawn-settings" aria-label="出生点设置">
+        <div id="tacticalSpawnSettings" class="spawn-settings" aria-label="出生点设置" hidden>
           <span>出生点</span>
-          <label>玩家<select id="tacticalPlayerSpawn"></select></label>
+          <label>玩家 A<select id="tacticalPlayerSpawn"></select></label>
+          <label class="player-b-setting" hidden>玩家 B<select id="tacticalPlayerBSpawn"></select></label>
           <label>电脑 A<select id="tacticalEnemySpawn"></select></label>
           <label class="enemy-b-setting" hidden>电脑 B<select id="tacticalEnemyBSpawn"></select></label>
           <button id="tacticalDefaultSpawns" type="button" title="恢复当前模式默认出生点">默认</button>
+        </div>
+        <button id="tacticalMapEditorBtn" type="button" aria-pressed="false">地图编辑器</button>
+        <div id="tacticalMapEditor" class="map-editor-panel" aria-label="地图编辑器" hidden>
+          <div class="map-editor-head">
+            <strong>地图编辑器</strong>
+            <span id="mapEditorHint">选择工具后点击地图。</span>
+          </div>
+          <div class="map-library-controls" aria-label="保存的地图">
+            <label>地图名<input id="mapEditorName" maxlength="20" autocomplete="off" /></label>
+            <label>已保存<select id="mapEditorLibrary"></select></label>
+            <button id="mapEditorLoad" type="button">载入</button>
+            <button id="mapEditorDelete" type="button">删除</button>
+          </div>
+          <div id="mapEditorTools" class="map-editor-tools" role="group" aria-label="地图工具">
+            <button type="button" data-map-tool="spawn-player" aria-pressed="false">我方 A</button>
+            <button type="button" data-map-tool="spawn-player-b" aria-pressed="false">我方 B</button>
+            <button type="button" data-map-tool="spawn-enemy" aria-pressed="false">敌方 A</button>
+            <button type="button" data-map-tool="spawn-enemy-b" aria-pressed="false">敌方 B</button>
+            <button type="button" data-map-tool="objective" aria-pressed="true">据点</button>
+            <button type="button" data-map-tool="energy" aria-pressed="false">能量点</button>
+            <button type="button" data-map-tool="bush" aria-pressed="false">草丛</button>
+            <button type="button" data-map-tool="wall" aria-pressed="false">巨石</button>
+            <button type="button" data-map-tool="thin-wall" aria-pressed="false">薄墙</button>
+            <button type="button" data-map-tool="erase" aria-pressed="false">擦除</button>
+          </div>
+          <div class="map-editor-actions">
+            <button id="mapEditorSave" type="button">保存地图</button>
+            <button id="mapEditorReset" type="button">恢复默认</button>
+            <button id="mapEditorCancel" type="button">退出编辑</button>
+          </div>
         </div>
         <div id="tacticalRoomSettings" class="room-settings" aria-label="在线房间" hidden>
           <span>在线房间</span>
