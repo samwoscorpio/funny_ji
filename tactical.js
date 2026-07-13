@@ -2842,8 +2842,8 @@
     if (room.result) {
       const resultKey = `${room.result.round}:${room.result.phase}`;
       if (!online.appliedResults.has(resultKey)) {
-        online.appliedResults.add(resultKey);
-        await applyTacticalOnlineResult(room.result);
+        const applied = await applyTacticalOnlineResult(room.result);
+        if (applied) online.appliedResults.add(resultKey);
       }
       return;
     }
@@ -2877,9 +2877,118 @@
     else setTacticalRoomStatus(`房间 ${room.code}：请选择${room.phase === "movement" ? "移动" : "行动"}。`);
   }
 
+  function cloneOnlineSnapshotValue(value) {
+    return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+  }
+
+  function serializeOnlineFighter(fighter) {
+    const { hero, ...data } = fighter;
+    return cloneOnlineSnapshotValue(data);
+  }
+
+  function serializeTacticalOnlineSnapshot() {
+    return {
+      version: 1,
+      round: state.round,
+      over: Boolean(state.over),
+      map: { energyTiles: TACTICAL_MAP.energyTiles.map(cloneTile) },
+      fighters: getAllTacticalFighters().map(serializeOnlineFighter),
+      tactical: {
+        playerScore: state.tactical.playerScore,
+        enemyScore: state.tactical.enemyScore,
+        objectiveHeld: cloneOnlineSnapshotValue(state.tactical.objectiveHeld || {}),
+        flames: cloneOnlineSnapshotValue(state.tactical.flames || []),
+        winReason: state.tactical.winReason || "",
+        prepRound: Boolean(state.tactical.prepRound),
+        spawnPoints: cloneOnlineSnapshotValue(state.tactical.spawnPoints || {}),
+      },
+    };
+  }
+
+  function restoreOnlineSnapshotFighter(raw) {
+    if (!raw?.id || !raw?.heroId) return null;
+    const fighter = makeFighter(raw.label || "玩家", raw.heroId, {
+      pharmacistLoadout: raw.flags?.pharmacistLoadout,
+    });
+    Object.assign(fighter, cloneOnlineSnapshotValue(raw));
+    fighter.hero = HEROES[fighter.heroId] || fighter.hero;
+    fighter.flags ||= {};
+    fighter.statuses = Array.isArray(fighter.statuses) ? fighter.statuses : [];
+    fighter.position = fighter.position ? cloneTile(fighter.position) : cloneTile(DEFAULT_SPAWNS.online.player);
+    fighter.plannedPath = Array.isArray(fighter.plannedPath) ? fighter.plannedPath.map(cloneTile) : [];
+    return fighter;
+  }
+
+  function applyTacticalOnlineSnapshot(snapshot) {
+    const online = getTacticalOnline();
+    if (!online || !snapshot || !Array.isArray(snapshot.fighters)) return false;
+    const fighters = new Map(snapshot.fighters.map((raw) => [raw?.id, restoreOnlineSnapshotFighter(raw)]).filter(([, fighter]) => fighter));
+    const ownIds = isOnlineTeamBattle()
+      ? [getOnlineFighterId(online.slot, 0), getOnlineFighterId(online.slot, 1)]
+      : [online.slot];
+    const opponentSlot = getOnlineOpponentSlot(online.slot);
+    const enemyIds = isOnlineTeamBattle()
+      ? [getOnlineFighterId(opponentSlot, 0), getOnlineFighterId(opponentSlot, 1)]
+      : [opponentSlot];
+    const ownA = fighters.get(ownIds[0]);
+    const enemyA = fighters.get(enemyIds[0]);
+    if (!ownA || !enemyA) return false;
+
+    state.player = ownA;
+    state.playerB = fighters.get(ownIds[1]) || null;
+    state.enemy = enemyA;
+    state.enemyB = fighters.get(enemyIds[1]) || null;
+    state.round = Number.isInteger(snapshot.round) ? snapshot.round : state.round;
+    state.over = Boolean(snapshot.over);
+    if (Array.isArray(snapshot.map?.energyTiles)) TACTICAL_MAP.energyTiles = snapshot.map.energyTiles.map(cloneTile);
+    const tacticalSnapshot = snapshot.tactical || {};
+    const hostIsSelf = online.slot === "p1";
+    state.tactical.playerScore = hostIsSelf ? tacticalSnapshot.playerScore || 0 : tacticalSnapshot.enemyScore || 0;
+    state.tactical.enemyScore = hostIsSelf ? tacticalSnapshot.enemyScore || 0 : tacticalSnapshot.playerScore || 0;
+    state.tactical.objectiveHeld = cloneOnlineSnapshotValue(tacticalSnapshot.objectiveHeld || {});
+    state.tactical.flames = cloneOnlineSnapshotValue(tacticalSnapshot.flames || []);
+    state.tactical.winReason = tacticalSnapshot.winReason || "";
+    state.tactical.prepRound = Boolean(tacticalSnapshot.prepRound);
+    state.tactical.spawnPoints = cloneOnlineSnapshotValue(tacticalSnapshot.spawnPoints || {});
+    state.melee.fighters = getAllTacticalFighters();
+    state.tactical.activePlayerId = state.player.id;
+    return true;
+  }
+
+  async function publishTacticalOnlineSnapshot(result) {
+    const online = getTacticalOnline();
+    if (!online || online.slot !== "p1") return null;
+    return apiRequest(`/api/rooms/${online.roomCode}/resolve`, {
+      playerId: online.playerId,
+      round: result.round,
+      phase: result.phase,
+      snapshot: serializeTacticalOnlineSnapshot(),
+    });
+  }
+
   async function applyTacticalOnlineResult(result) {
     const online = getTacticalOnline();
-    if (!online) return;
+    if (!online) return false;
+    const resultKey = `${result.round}:${result.phase}`;
+    if (result.snapshot) {
+      if (!applyTacticalOnlineSnapshot(result.snapshot)) {
+        setTacticalRoomStatus("房间快照无效，正在等待重新同步。");
+        return false;
+      }
+      online.pendingPlan = false;
+      state.tactical.resolving = false;
+      renderTactical();
+      if (state.over) finishTacticalMatch();
+      await acknowledgeTacticalOnlineResult(resultKey, result.round);
+      return true;
+    }
+    if (online.slot !== "p1") {
+      state.tactical.phase = "resolving";
+      state.tactical.resolving = true;
+      renderTactical();
+      setTacticalRoomStatus(`房间 ${online.roomCode}：等待房主结算本阶段。`);
+      return false;
+    }
     const opponentSlot = getOnlineOpponentSlot(online.slot);
     state.tactical.phase = "resolving";
     state.tactical.resolving = true;
@@ -2954,14 +3063,26 @@
     online.pendingPlan = false;
     state.tactical.resolving = false;
     renderTactical();
-    const resultKey = `${result.round}:${result.phase}`;
-    if (online.acknowledgedResults.has(resultKey)) return;
+    try {
+      await publishTacticalOnlineSnapshot(result);
+    } catch (error) {
+      setTacticalRoomStatus(`上传权威结算失败：${error.message}`);
+      return false;
+    }
+    await acknowledgeTacticalOnlineResult(resultKey, result.round);
+    return true;
+  }
+
+  async function acknowledgeTacticalOnlineResult(resultKey, round) {
+    const online = getTacticalOnline();
+    if (!online || online.acknowledgedResults.has(resultKey)) return;
     online.acknowledgedResults.add(resultKey);
     try {
-      await apiRequest(`/api/rooms/${online.roomCode}/advance`, { playerId: online.playerId, round: result.round });
+      await apiRequest(`/api/rooms/${online.roomCode}/advance`, { playerId: online.playerId, round });
       if (state.over) stopTacticalOnlinePolling();
       else setTacticalRoomStatus(`房间 ${online.roomCode}：等待对手确认结算。`);
     } catch (error) {
+      online.acknowledgedResults.delete(resultKey);
       setTacticalRoomStatus(`确认结算失败：${error.message}`);
     }
   }

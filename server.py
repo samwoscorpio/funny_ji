@@ -73,6 +73,24 @@ def sanitize_room_blob(value):
     return value if isinstance(value, dict) else None
 
 
+def sanitize_resolution_snapshot(value):
+    """Keep tactical resolution payloads bounded before relaying them to guests.
+
+    The tactical client owns the combat rules today, but an online room must still
+    have one authoritative result.  Only the room host can publish this compact
+    JSON snapshot after resolving a submitted phase.
+    """
+    if not isinstance(value, dict):
+        return None
+    try:
+        encoded = json.dumps(value, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return None
+    if len(encoded.encode("utf-8")) > 120_000:
+        return None
+    return value
+
+
 def validate_tactical_plan(plan, phase):
     if not isinstance(plan, dict) or plan.get("phase") != phase:
         return "计划阶段不匹配。"
@@ -154,6 +172,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if len(parts) == 4 and parts[:2] == ["api", "rooms"] and parts[3] == "action":
             self.submit_action(parts[2].upper())
+            return
+        if len(parts) == 4 and parts[:2] == ["api", "rooms"] and parts[3] == "resolve":
+            self.resolve_tactical_phase(parts[2].upper())
             return
         if len(parts) == 4 and parts[:2] == ["api", "rooms"] and parts[3] == "advance":
             self.advance_room(parts[2].upper())
@@ -287,6 +308,7 @@ class Handler(BaseHTTPRequestHandler):
                                 "p1": room["choices"]["p1"],
                                 "p2": room["choices"]["p2"],
                             },
+                            "snapshot": None,
                         }
                     else:
                         room["result"] = {
@@ -297,6 +319,40 @@ class Handler(BaseHTTPRequestHandler):
                             },
                         }
                     room["acks"] = set()
+                payload = public_room(room, player_id)
+            json_response(self, 200, payload)
+        except Exception as exc:
+            error(self, 400, str(exc))
+
+    def resolve_tactical_phase(self, code):
+        try:
+            data = read_json(self)
+            player_id = data.get("playerId")
+            round_no = data.get("round")
+            phase = data.get("phase")
+            snapshot = sanitize_resolution_snapshot(data.get("snapshot"))
+            if not player_id:
+                error(self, 400, "缺少玩家身份。")
+                return
+            if not snapshot:
+                error(self, 400, "结算快照无效。")
+                return
+            with LOCK:
+                room = ROOMS.get(code)
+                if not room:
+                    error(self, 404, "房间不存在。")
+                    return
+                # p1 is the fixed room host, so both browser views converge on
+                # the same post-resolution board instead of simulating twice.
+                if find_slot(room, player_id) != "p1":
+                    error(self, 403, "只有房主可以发布本阶段结算。")
+                    return
+                result = room.get("result")
+                if not result or result.get("round") != round_no or result.get("phase") != phase:
+                    error(self, 409, "当前阶段已变化，请重新同步。")
+                    return
+                if result.get("snapshot") is None:
+                    result["snapshot"] = snapshot
                 payload = public_room(room, player_id)
             json_response(self, 200, payload)
         except Exception as exc:
@@ -317,6 +373,9 @@ class Handler(BaseHTTPRequestHandler):
                     error(self, 403, "玩家身份不属于这个房间。")
                     return
                 if room["result"] and round_no == room["result"]["round"]:
+                    if room.get("mode") in ("tactical", "tactical-team") and not room["result"].get("snapshot"):
+                        error(self, 409, "等待房主完成本阶段结算。")
+                        return
                     room["acks"].add(slot)
                     active_slots = {key for key, value in room["players"].items() if value}
                     if active_slots and room["acks"] >= active_slots:
