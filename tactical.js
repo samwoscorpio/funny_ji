@@ -3,11 +3,14 @@
  * functions remain the single source of truth for combat numbers and skills.
  */
 (() => {
+  const tacticalCore = window.JiTacticalCore;
   const TACTICAL_SETUP_KEY = "ji-tactical-setup-v2";
   const TACTICAL_MAP_KEY = "ji-tactical-map-v1";
   const TACTICAL_MAP_LIBRARY_KEY = "ji-tactical-map-library-v1";
   const TACTICAL_ACTIVE_MAP_ID_KEY = "ji-tactical-active-map-id-v1";
   const TACTICAL_SCORING_KEY = "ji-tactical-scoring-v1";
+  const TUTORIAL_MAP_NAME = "练习地图1";
+  const tutorialRequest = new URLSearchParams(window.location.search).get("tutorial");
   const DEFAULT_SPAWNS = {
     duel: { player: { row: 6, col: 1 }, enemy: { row: 1, col: 6 }, enemyB: { row: 6, col: 6 } },
     trio: { player: { row: 6, col: 3 }, enemy: { row: 1, col: 1 }, enemyB: { row: 1, col: 6 } },
@@ -48,16 +51,96 @@
   const DEFAULT_SCORING_RULES = Object.freeze({ killScore: 1, objectiveScore: 1, victoryScore: 3 });
   const MIN_MOVEMENT_CONTEST_TOLL = 1;
   const MAX_MOVEMENT_CONTEST_TOLL = 3;
+  const ACTION_FILTERS = new Set(["recommended", "available", "all", "charge", "defense", "range-1", "range-2", "special", "skill"]);
+  const RECOMMENDED_ACTION_LIMIT = 5;
   const OBJECTIVE_RESPAWNS = [
     { row: 1, col: 2 }, { row: 1, col: 3 }, { row: 1, col: 4 }, { row: 1, col: 5 },
     { row: 6, col: 2 }, { row: 6, col: 3 }, { row: 6, col: 4 }, { row: 6, col: 5 },
     { row: 3, col: 1 }, { row: 4, col: 6 },
   ];
   const ROW_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  // Standee art is deliberately opt-in. Heroes without a finished battlefield sprite
+  // retain their established hex portrait token until their art is ready.
+  const TACTICAL_STANDEES = {
+    classic: {
+      idle: "./assets/iso-arena/units/classic-warrior-standee-v1.png",
+      walk: {
+        right: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/classic-warrior-walk-${frame}.png`),
+        upRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/classic-warrior-walk-up-right-${frame}.png`),
+        downRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/classic-warrior-walk-down-right-${frame}.png`),
+      },
+      attack: {
+        right: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/classic-warrior-attack-${frame}.png`),
+        upRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/classic-warrior-attack-up-right-${frame}.png`),
+        downRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/classic-warrior-attack-down-right-${frame}.png`),
+      },
+      guard: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/classic-warrior-guard-${frame}.png`),
+      hit: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/classic-warrior-hit-${frame}.png`),
+    },
+    assassin: {
+      idle: "./assets/iso-arena/units/assassin-standee-v2.png",
+      walk: {
+        right: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/assassin-walk-${frame}.png`),
+        upRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/assassin-walk-up-right-${frame}.png`),
+        downRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/assassin-walk-down-right-${frame}.png`),
+      },
+      attack: {
+        right: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/assassin-attack-${frame}.png`),
+        upRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/assassin-attack-up-right-${frame}.png`),
+        downRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/assassin-attack-down-right-${frame}.png`),
+      },
+      guard: [1, 2, 1, 4].map((frame) => `./assets/iso-arena/units/animated/assassin-guard-${frame}.png`),
+      hit: [3, 3, 4, 1].map((frame) => `./assets/iso-arena/units/animated/assassin-guard-${frame}.png`),
+      sneak: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/assassin-sneak-${frame}.png`),
+    },
+    vampire: {
+      idle: "./assets/iso-arena/units/vampire-standee-v1.png",
+      walk: {
+        right: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/vampire-walk-${frame}.png`),
+      },
+      attack: {
+        right: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/vampire-attack-${frame}.png`),
+      },
+      guard: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/vampire-guard-${frame}.png`),
+      hit: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/animated/vampire-hit-${frame}.png`),
+    },
+    iceSorcerer: {
+      idle: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/ice-sorcerer/animated/ice-sorcerer-idle-${frame}.png`),
+      walk: {
+        right: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/ice-sorcerer/animated/ice-sorcerer-walk-${frame}.png`),
+        upRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/ice-sorcerer/animated/ice-sorcerer-walk-${frame}.png`),
+        downRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/ice-sorcerer/animated/ice-sorcerer-walk-${frame}.png`),
+      },
+      attack: {
+        right: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/ice-sorcerer/animated/ice-sorcerer-ice-blade-cast-${frame}.png`),
+        upRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/ice-sorcerer/animated/ice-sorcerer-ice-blade-cast-${frame}.png`),
+        downRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/ice-sorcerer/animated/ice-sorcerer-ice-blade-cast-${frame}.png`),
+      },
+      guard: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/ice-sorcerer/animated/ice-sorcerer-guard-${frame}.png`),
+      hit: [3, 2, 4, 1].map((frame) => `./assets/iso-arena/units/generated/ice-sorcerer/animated/ice-sorcerer-guard-${frame}.png`),
+    },
+    astrologer: {
+      idle: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/astrologer/animated/astrologer-idle-${frame}.png`),
+      walk: {
+        right: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/astrologer/animated/astrologer-walk-${frame}.png`),
+        upRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/astrologer/animated/astrologer-walk-${frame}.png`),
+        downRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/astrologer/animated/astrologer-walk-${frame}.png`),
+      },
+      attack: {
+        right: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/astrologer/animated/astrologer-drain-${frame}.png`),
+        upRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/astrologer/animated/astrologer-drain-${frame}.png`),
+        downRight: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/astrologer/animated/astrologer-drain-${frame}.png`),
+      },
+      drain: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/astrologer/animated/astrologer-drain-${frame}.png`),
+      predict: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/astrologer/animated/astrologer-predict-${frame}.png`),
+      guard: [1, 2, 3, 4].map((frame) => `./assets/iso-arena/units/generated/astrologer/animated/astrologer-guard-${frame}.png`),
+      hit: [3, 2, 4, 1].map((frame) => `./assets/iso-arena/units/generated/astrologer/animated/astrologer-guard-${frame}.png`),
+    },
+  };
   const tacticalUi = {
     round: document.querySelector("#tacticalRound"), phase: document.querySelector("#tacticalPhase"), score: document.querySelector("#tacticalScore"), modeLabel: document.querySelector("#tacticalModeLabel"),
     shell: document.querySelector("#tacticalShell"), mapSelect: document.querySelector("#tacticalMapSelectBtn"), menuButton: document.querySelector("#tacticalMenuBtn"), menuClose: document.querySelector("#tacticalMenuClose"), menuBackdrop: document.querySelector("#tacticalMenuBackdrop"),
-    map: document.querySelector("#tacticalMap"), mapHint: document.querySelector("#mapHint"),
+    map: document.querySelector("#tacticalMap"), mapName: document.querySelector("#tacticalMapName"), mapHint: document.querySelector("#mapHint"), view3dToggle: document.querySelector("#tactical3dToggle"), stage3d: document.querySelector("#tactical3dStage"),
     playerCard: document.querySelector("#playerTacticalCard"), playerOverview: document.querySelector("#playerTeamOverview"), enemyCard: document.querySelector("#enemyTacticalCard"), enemyBCard: document.querySelector("#enemyBTacticalCard"),
     enemyOverview: document.querySelector("#enemyTeamOverview"),
     cards: document.querySelector("#tacticalCards"), filters: document.querySelector("#actionFilters"), preview: document.querySelector("#tacticalPreview"),
@@ -75,15 +158,19 @@
     actionTitle: document.querySelector(".action-dock h2"),
     scoring: document.querySelector("#tacticalScoringBtn"), manual: document.querySelector("#tacticalManualBtn"), history: document.querySelector("#tacticalHistoryBtn"),
     modal: document.querySelector("#tacticalModal"), modalTitle: document.querySelector("#tacticalModalTitle"), modalBody: document.querySelector("#tacticalModalBody"), modalClose: document.querySelector("#tacticalModalClose"),
+    tutorialGuide: document.querySelector("#tutorialGuide"), tutorialKicker: document.querySelector("#tutorialKicker"), tutorialTitle: document.querySelector("#tutorialTitle"), tutorialText: document.querySelector("#tutorialText"), tutorialProgress: document.querySelector("#tutorialProgress"), tutorialNext: document.querySelector("#tutorialNextBtn"), tutorialSkip: document.querySelector("#tutorialSkipBtn"),
   };
   let tileTooltipTimer = null;
   let tileTooltip = null;
   let setupBattleMode = "duel";
   let scoringRules = loadScoringRules();
   let pharmacistLoadoutDraft = getPlayerPharmacistLoadout();
+  let elfLoadoutDraft = getPlayerElfLoadout();
   let activeMapConfig = cloneMapConfig(DEFAULT_TACTICAL_MAP);
   let tacticalLogEntries = [];
   let tacticalMenuOpen = true;
+  let lastMapRenderSignature = "";
+  let tutorial = createTutorialState(tutorialRequest);
   const mapEditor = {
     active: false,
     tool: "objective",
@@ -97,6 +184,108 @@
     lastPointerAt: 0,
   };
 
+  function createTutorialState(request) {
+    if (!['classic', 'assassin'].includes(request)) return null;
+    return { id: request, step: 0, mapFound: false };
+  }
+
+  function getTutorialSteps() {
+    if (!tutorial) return [];
+    if (tutorial.id === 'assassin') {
+      return [
+        ['英雄选择', '第二课：刺客', '点击左下角的己方角色卡可打开英雄选择页。这里已为你预选刺客：他用潜行换取下一回合的额外移动。', '开始移动'],
+        ['预备移动', '走近战场', '预备回合只能移动 1 格。点击相邻蓝框，或使用 WASD 与 Q/E 选择六个方向，然后锁定移动。', '等待移动'],
+        ['行动选择', '先积蓄 1 XP', '潜行需要 1 XP。选择 Ji 并锁定行动，先为下一回合准备资源。', '等待 Ji'],
+        ['回合结算', '资源已经到位', '现在你拥有 1 XP。下一回合进入行动阶段后，尝试使用刺客技能“潜行”。', '继续'],
+        ['刺客技能', '潜行', '潜行花费 1 XP，自带中防；下回合开始前可额外移动一次。选择它并锁定行动。', '等待潜行'],
+        ['完成', '你已经掌握刺客', '潜行的价值不只是防御，更是把下一回合的移动优势转换为距离优势。之后可尝试用小刀抢节奏，或绕向据点。', '完成训练'],
+      ];
+    }
+    return [
+      ['新手引导', '第一课：经典武者', '这是一场固定的经典武者 1v1。你会依次学习预备移动、Ji、防御、攻击距离与据点得分。', '开始训练'],
+      ['预备移动', '先迈出第一步', '开局先进入预备回合，双方只能移动 1 格且不能出招。选择相邻蓝框，或使用 WASD 与 Q/E，再锁定移动。', '等待移动'],
+      ['正式回合', '移动后才能出招', '位置会先同时结算。第 1 回合仍先移动，再进入行动阶段。注意六边形相邻关系决定攻击距离。', '等待出招'],
+      ['蓄气', '选择 Ji', 'Ji 不消耗 XP，并让你获得 1 XP。选中 Ji 后锁定行动，观察双方同时结算。', '等待 Ji'],
+      ['回合结算', 'Ji 已锁定', '双方会同时出招。观察 XP 的变化；结算完成后再进入下一回合移动。', '等待结算'],
+      ['防御', '选择小防', '小防不花费 XP，防御值为 4。面对低强度攻击时，防御比盲目出刀更稳妥。选择小防并锁定。', '等待小防'],
+      ['回合结算', '护盾生效', '小防只保护本回合。每回合都要重新判断距离、XP 与对方可能的攻击。完成结算后再学习攻击。', '等待结算'],
+      ['攻击', '选择小刀', '小刀花费 1 XP，距离为 1。先让敌人进入相邻格，再选择小刀并点选目标；攻击强度高于对方防御才会造成伤害。', '等待小刀'],
+      ['回合结算', '小刀已锁定', '攻击、命中与防御都会在双方锁定后同时结算。若目标离开距离、或防御足够高，攻击就不会造成伤害。', '等待结算'],
+      ['据点', '理解胜利条件', '中央据点需要先占据一回合；下一回合仍站在据点上且支付 2 XP，才获得据点分。击倒敌人也会得分。', '进入刺客教学'],
+    ];
+  }
+
+  function syncTutorialProgress() {
+    if (!tutorial) return;
+    const selected = state.tactical?.selectedCardId;
+    if (tutorial.step === 1 && !isPreparationRound() && state.round >= 1 && state.tactical.phase === 'movement') tutorial.step = 2;
+    else if (tutorial.step === 2 && state.tactical.phase === 'action') tutorial.step = 3;
+    else if (tutorial.id === 'classic' && tutorial.step === 3 && selected === 'ji') tutorial.step = 4;
+    else if (tutorial.id === 'classic' && tutorial.step === 4 && state.round >= 2 && state.tactical.phase === 'movement') tutorial.step = 5;
+    else if (tutorial.id === 'classic' && tutorial.step === 5 && selected === 'def-small') tutorial.step = 6;
+    else if (tutorial.id === 'classic' && tutorial.step === 6 && state.round >= 3 && state.tactical.phase === 'movement') tutorial.step = 7;
+    else if (tutorial.id === 'classic' && tutorial.step === 7 && selected === 'atk-1') tutorial.step = 8;
+    else if (tutorial.id === 'classic' && tutorial.step === 8 && state.round >= 4 && state.tactical.phase === 'movement') tutorial.step = 9;
+    else if (tutorial.id === 'assassin' && tutorial.step === 2 && selected === 'ji') tutorial.step = 3;
+    else if (tutorial.id === 'assassin' && tutorial.step === 3 && state.round >= 2 && state.tactical.phase === 'action') tutorial.step = 4;
+    else if (tutorial.id === 'assassin' && tutorial.step === 4 && selected === 'assassin-sneak') tutorial.step = 5;
+    else if (tutorial.id === 'assassin' && tutorial.step === 5 && state.round >= 3 && state.tactical.phase === 'movement') tutorial.step = 6;
+  }
+
+  function renderTutorialGuide() {
+    const guide = tacticalUi.tutorialGuide;
+    if (!guide) return;
+    guide.hidden = !tutorial;
+    if (!tutorial) return;
+    const steps = getTutorialSteps();
+    const index = Math.min(tutorial.step, steps.length - 1);
+    const [kicker, title, text, action] = steps[index];
+    tacticalUi.tutorialKicker.textContent = kicker;
+    tacticalUi.tutorialTitle.textContent = title;
+    tacticalUi.tutorialText.textContent = text;
+    tacticalUi.tutorialProgress.textContent = `${index + 1} / ${steps.length}${tutorial.mapFound ? '' : ' · 使用默认练习场'}`;
+    tacticalUi.tutorialNext.textContent = action;
+    tacticalUi.tutorialNext.hidden = !(index === 0 || index === steps.length - 1);
+  }
+
+  function advanceTutorial() {
+    if (!tutorial) return;
+    const lastStep = getTutorialSteps().length - 1;
+    if (tutorial.step === 0) tutorial.step = 1;
+    else if (tutorial.step >= lastStep) {
+      if (tutorial.id === 'classic') {
+        window.location.href = './index.html?tutorial=assassin';
+        return;
+      }
+      window.location.href = './world.html';
+      return;
+    }
+    renderTactical();
+  }
+
+  function exitTutorial() { window.location.href = './world.html'; }
+
+  function setupTutorialFromRequest() {
+    if (!tutorial) return;
+    const practiceEntry = readMapLibrary().find((entry) => String(entry.name || '').trim() === TUTORIAL_MAP_NAME);
+    if (practiceEntry) {
+      applyMapConfig(sanitizeMapConfig(practiceEntry.map));
+      setActiveMapId(practiceEntry.id);
+      writeStorage(TACTICAL_MAP_KEY, JSON.stringify(TACTICAL_MAP));
+      initializeTacticalSetup();
+      tutorial.mapFound = true;
+    }
+    setupBattleMode = 'duel';
+    syncBattleModeControls();
+    tacticalUi.playerHero.value = tutorial.id === 'assassin' ? 'assassin' : 'classic';
+    tacticalUi.enemyHero.value = 'classic';
+    const spawns = practiceEntry?.spawns
+      ? sanitizeSpawnDraft(practiceEntry.spawns, TACTICAL_MAP)
+      : getDefaultSpawnDraft();
+    applySpawnDraftToControls(spawns);
+    tacticalMenuOpen = false;
+  }
+
   state.tactical = {
     phase: "movement",
     selection: "move",
@@ -105,7 +294,7 @@
     selectedTarget: null,
     selectedTargetId: null,
     selectedTargets: [],
-    filter: "available",
+    filter: "recommended",
     playerScore: 0,
     enemyScore: 0,
     flames: [],
@@ -124,9 +313,9 @@
   ui.playerCard = tacticalUi.playerCard;
   ui.enemyCard = tacticalUi.enemyCard;
 
-  function keyOf(position) { return `${position.row},${position.col}`; }
-  function sameTile(a, b) { return Boolean(a && b && a.row === b.row && a.col === b.col); }
-  function cloneTile(position) { return { row: position.row, col: position.col }; }
+  function keyOf(position) { return tacticalCore.keyOf(position); }
+  function sameTile(a, b) { return tacticalCore.sameTile(a, b); }
+  function cloneTile(position) { return tacticalCore.cloneTile(position); }
   function coordName(position) { return position ? `${ROW_LABELS[position.row]}${position.col + 1}` : "未选择"; }
   function clampRuleValue(value, fallback, min = 0) {
     const parsed = Number.parseInt(value, 10);
@@ -158,34 +347,30 @@
   function getFighterTeam(fighter) { return getPlayerFighters().includes(fighter) ? "player" : "enemy"; }
   function getFighterSpawn(fighter) { return state.tactical?.spawnPoints?.[fighter.id] || fighter.position; }
   function isPreparationRound() { return Boolean(state.tactical?.prepRound); }
-  function getCurrentMoveLimit() { return isPreparationRound() ? PREP_MOVE_POINTS : MOVE_POINTS; }
+  function hasAssassinSneakMove(fighter) {
+    return Boolean(fighter?.statuses?.some((status) => status.id === "assassin-sneak"));
+  }
+  function getMoveLimitForFighter(fighter) {
+    return (isPreparationRound() ? PREP_MOVE_POINTS : MOVE_POINTS) + (isPreparationRound() ? 0 : (hasAssassinSneakMove(fighter) ? (BALANCE.heroes.assassin.sneakMoveBonus || 1) : 0));
+  }
+  function getCurrentMoveLimit() { return getMoveLimitForFighter(getActivePlayer()); }
+  function consumeAssassinSneakMove(fighter, logs = []) {
+    if (!hasAssassinSneakMove(fighter)) return;
+    fighter.statuses = (fighter.statuses || []).filter((status) => status.id !== "assassin-sneak");
+    logs.push(`${fighter.label}完成潜行移动，潜行状态结束。`);
+  }
+  function refreshMovePointsForPhase(phase = state.tactical?.phase) {
+    for (const fighter of getAllTacticalFighters()) {
+      fighter.maxMovePoints = getMoveLimitForFighter(fighter);
+      fighter.movePoints = phase === "movement" ? fighter.maxMovePoints : 0;
+    }
+  }
   function uniqueTiles(tiles) {
-    const seen = new Set();
-    return (tiles || [])
-      .filter((tile) => tile && Number.isInteger(tile.row) && Number.isInteger(tile.col))
-      .filter((tile) => {
-        const key = keyOf(tile);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .map(cloneTile);
+    return tacticalCore.uniqueTiles(tiles);
   }
-  function edgeKey(first, second) {
-    return [keyOf(first), keyOf(second)].sort().join("|");
-  }
-  function parseEdgeKey(key) {
-    return String(key || "")
-      .split("|")
-      .map((part) => {
-        const [row, col] = part.split(",").map(Number);
-        return { row, col };
-      });
-  }
-  function normalizeEdgeKey(key) {
-    const [first, second] = parseEdgeKey(key);
-    return first && second ? edgeKey(first, second) : "";
-  }
+  function edgeKey(first, second) { return tacticalCore.edgeKey(first, second); }
+  function parseEdgeKey(key) { return tacticalCore.parseEdgeKey(key); }
+  function normalizeEdgeKey(key) { return tacticalCore.normalizeEdgeKey(key); }
   function cloneMapConfig(map) {
     return {
       rows: map?.rows || DEFAULT_TACTICAL_MAP.rows,
@@ -198,11 +383,7 @@
     };
   }
   function inBoundsForMap(position, map = TACTICAL_MAP) {
-    return Boolean(position)
-      && position.row >= 0
-      && position.row < map.rows
-      && position.col >= 0
-      && position.col < map.cols;
+    return tacticalCore.inBounds(position, map);
   }
   function areRawAdjacent(first, second, map = TACTICAL_MAP) {
     return inBoundsForMap(first, map)
@@ -210,7 +391,21 @@
       && directionalNeighbors(first).some((tile) => sameTile(tile, second));
   }
   function hasThinWallBetween(first, second, map = TACTICAL_MAP) {
-    return Boolean(first && second && (map.thinWalls || []).includes(edgeKey(first, second)));
+    if (!first || !second) return false;
+    const key = edgeKey(first, second);
+    return Boolean((map.thinWalls || []).includes(key)
+      || (map === TACTICAL_MAP && getActiveTemporaryThinWalls().includes(key)));
+  }
+
+  function getActiveTemporaryThinWalls(round = state.round) {
+    return (state.tactical?.temporaryThinWalls || [])
+      .filter((wall) => wall.activeRound <= round && wall.expireRound > round)
+      .map((wall) => wall.key);
+  }
+
+  function pruneTemporaryThinWalls(round = state.round) {
+    if (!state.tactical?.temporaryThinWalls) return;
+    state.tactical.temporaryThinWalls = state.tactical.temporaryThinWalls.filter((wall) => wall.expireRound > round);
   }
   function sanitizeMapConfig(raw) {
     const base = cloneMapConfig(raw || DEFAULT_TACTICAL_MAP);
@@ -278,6 +473,12 @@
     const activeId = getActiveMapId();
     if (!activeId) return null;
     return readMapLibrary().find((entry) => entry.id === activeId) || null;
+  }
+  function getCurrentMapName() {
+    if (mapEditor.active) {
+      return normalizeMapName(tacticalUi.mapEditorName?.value || getActiveMapEntry()?.name || "默认潮汐遗迹");
+    }
+    return getActiveMapEntry()?.name || "默认潮汐遗迹";
   }
   function saveMapLibraryEntry(name, map, spawns, existingId = "") {
     const library = readMapLibrary();
@@ -432,14 +633,7 @@
       }
     }
   }
-  function directionalNeighbors(position) {
-    const diagonalCol = position.row & 1 ? position.col + 1 : position.col - 1;
-    return [
-      { row: position.row, col: position.col - 1 }, { row: position.row, col: position.col + 1 },
-      { row: position.row - 1, col: position.col }, { row: position.row - 1, col: diagonalCol },
-      { row: position.row + 1, col: position.col }, { row: position.row + 1, col: diagonalCol },
-    ];
-  }
+  function directionalNeighbors(position) { return tacticalCore.directionalNeighbors(position); }
   function neighbors(position, map = TACTICAL_MAP) {
     return directionalNeighbors(position)
       .filter((tile) => inBounds(tile, map) && !isWall(tile, map) && !hasThinWallBetween(position, tile, map));
@@ -516,6 +710,7 @@
     tacticalUi.enemyBHero.value = HEROES[saved.enemyBHero] ? saved.enemyBHero : "balancedBot";
     tacticalUi.playerName.value = normalizePlayerName(readStorage(STORAGE_KEYS.playerName) || DEFAULT_PLAYER_NAME);
     pharmacistLoadoutDraft = getPlayerPharmacistLoadout();
+    elfLoadoutDraft = getPlayerElfLoadout();
     initializeTacticalSetup();
   }
 
@@ -599,7 +794,7 @@
     return ["player", "enemy"];
   }
 
-  function getSpawnToolConfig(tool) {
+  function getSpawnToolConfig(tool = mapEditor.tool) {
     return ({
       "spawn-player": { key: "player", label: "我方 A", shortLabel: "我A", tone: "player-a" },
       "spawn-player-b": { key: "playerB", label: "我方 B", shortLabel: "我B", tone: "player-b" },
@@ -940,6 +1135,7 @@
       return;
     }
     mapEditor.spawns[config.key] = cloneTile(position);
+    applySpawnDraftToControls(mapEditor.spawns);
     mapEditor.notice = `${config.label}已设置在 ${coordName(position)}。`;
   }
 
@@ -1136,6 +1332,7 @@
     if (tacticalUi.playerHero.value === "pharmacist") {
       pharmacistLoadoutDraft = getPlayerPharmacistLoadout();
     }
+    if (tacticalUi.playerHero.value === "elf") elfLoadoutDraft = getPlayerElfLoadout();
   }
 
   function applyDraftPharmacistLoadoutToPlayer() {
@@ -1147,17 +1344,28 @@
   }
 
   function isPharmacistLoadoutPhase() {
-    return state.tactical?.phase === "loadout" && getPlayerFighters().some((fighter) => fighter.heroId === "pharmacist") && state.tactical.loadoutPending;
+    return state.tactical?.phase === "loadout" && state.tactical.loadoutPending && getCurrentOpeningLoadout() === "pharmacist";
+  }
+
+  function getCurrentOpeningLoadout() {
+    const queue = state.tactical?.loadoutQueue || [];
+    return queue[state.tactical?.loadoutIndex || 0] || null;
+  }
+
+  function completeOpeningLoadout() {
+    state.tactical.loadoutIndex = (state.tactical.loadoutIndex || 0) + 1;
+    if (getCurrentOpeningLoadout()) return;
+    state.tactical.loadoutPending = false;
+    state.tactical.phase = "movement";
+    state.tactical.selection = "move";
   }
 
   function confirmInitialPharmacistLoadout() {
     if (!isPharmacistLoadoutPhase() || pharmacistLoadoutDraft.length !== getRequiredPharmacistLoadoutSize()) return;
     applyDraftPharmacistLoadoutToPlayer();
     savePlayerPharmacistLoadout(pharmacistLoadoutDraft);
-    state.tactical.loadoutPending = false;
-    state.tactical.phase = "movement";
-    state.tactical.selection = "move";
-    addTacticalLog(`药师完成配药：${getPharmacistLoadoutNames(pharmacistLoadoutDraft)}，进入预备移动。`, "move");
+    completeOpeningLoadout();
+    addTacticalLog(`药师完成配药：${getPharmacistLoadoutNames(pharmacistLoadoutDraft)}${getCurrentOpeningLoadout() ? "，接着选择精灵祝福。" : "，进入预备移动。"}`, "move");
     renderTactical();
   }
 
@@ -1166,6 +1374,71 @@
       .map((id) => PHARMACIST_LOADOUT_OPTIONS.find((option) => option.id === id)?.name)
       .filter(Boolean)
       .join(" / ");
+  }
+
+  function getRequiredElfLoadoutSize() { return BALANCE.heroes.elf.loadoutSize || 2; }
+
+  function getConfiguredElfLoadout() {
+    return elfLoadoutDraft.length === getRequiredElfLoadoutSize() ? elfLoadoutDraft.slice() : getPlayerElfLoadout();
+  }
+
+  function isElfLoadoutPhase() {
+    return state.tactical?.phase === "loadout" && state.tactical.loadoutPending && getCurrentOpeningLoadout() === "elf";
+  }
+
+  function applyDraftElfLoadoutToPlayer() {
+    for (const fighter of getPlayerFighters().filter((entry) => entry.heroId === "elf")) {
+      fighter.flags.elfLoadout = elfLoadoutDraft.length === getRequiredElfLoadoutSize()
+        ? normalizeElfLoadout(elfLoadoutDraft)
+        : elfLoadoutDraft.slice();
+    }
+  }
+
+  function renderElfLoadoutCards() {
+    tacticalUi.cards.textContent = "";
+    tacticalUi.cards.classList.add("is-loadout");
+    tacticalUi.cards.classList.remove("has-many-actions");
+    tacticalUi.filters.hidden = true;
+    if (tacticalUi.actionTitle) tacticalUi.actionTitle.textContent = "开局祝福";
+    const required = getRequiredElfLoadoutSize();
+    const panel = document.createElement("section");
+    panel.className = "tactical-pharmacist-loadout tactical-loadout-dock";
+    panel.setAttribute("aria-label", "精灵祝福选择");
+    const heading = document.createElement("div"); heading.className = "loadout-heading";
+    const title = document.createElement("span"); title.textContent = "精灵祝福";
+    const status = document.createElement("strong"); status.textContent = `已选 ${elfLoadoutDraft.length}/${required}`;
+    heading.append(title, status);
+    const hint = document.createElement("p"); hint.className = "loadout-hint"; hint.textContent = "预备移动前选择 2 个主动技；确认后本局不能再更改。";
+    const options = document.createElement("div"); options.className = "tactical-loadout-options";
+    for (const option of ELF_LOADOUT_OPTIONS) {
+      const button = document.createElement("button"); button.type = "button"; button.className = "tactical-loadout-card";
+      button.classList.toggle("is-selected", elfLoadoutDraft.includes(option.id));
+      const name = document.createElement("strong"); name.textContent = option.name;
+      const text = document.createElement("span"); text.textContent = option.text;
+      button.append(name, text);
+      button.addEventListener("click", () => {
+        const selected = elfLoadoutDraft.slice(); const index = selected.indexOf(option.id);
+        if (index >= 0) selected.splice(index, 1);
+        else if (selected.length < required) selected.push(option.id);
+        else { selected.shift(); selected.push(option.id); }
+        elfLoadoutDraft = selected;
+        applyDraftElfLoadoutToPlayer();
+        renderTactical();
+      });
+      options.append(button);
+    }
+    const confirm = document.createElement("button"); confirm.type = "button"; confirm.className = "loadout-confirm";
+    confirm.disabled = elfLoadoutDraft.length !== required;
+    confirm.textContent = elfLoadoutDraft.length === required ? "确认祝福，进入预备移动" : "请选择 2 个主动技";
+    confirm.addEventListener("click", () => {
+      if (!isElfLoadoutPhase() || elfLoadoutDraft.length !== required) return;
+      applyDraftElfLoadoutToPlayer(); savePlayerElfLoadout(elfLoadoutDraft);
+      completeOpeningLoadout();
+      addTacticalLog(`精灵完成祝福选择：${elfLoadoutDraft.map((id) => ELF_LOADOUT_OPTIONS.find((option) => option.id === id)?.name).filter(Boolean).join(" / ")}，进入预备移动。`, "move");
+      renderTactical();
+    });
+    panel.append(heading, hint, options, confirm);
+    tacticalUi.cards.append(panel);
   }
 
   function resetTacticalGame() {
@@ -1177,18 +1450,23 @@
     state.round = 0;
     const setupIsOnline = isOnlineSetupMode();
     const battleMode = setupBattleMode === "online-team" ? "team" : setupBattleMode === "online" ? "duel" : setupBattleMode;
-    const needsLoadout = !setupIsOnline && (tacticalUi.playerHero.value === "pharmacist" || (battleMode === "team" && tacticalUi.playerBHero.value === "pharmacist"));
+    const openingHeroes = [tacticalUi.playerHero.value, battleMode === "team" ? tacticalUi.playerBHero.value : null];
+    const loadoutQueue = !setupIsOnline
+      ? ["pharmacist", "elf"].filter((heroId) => openingHeroes.includes(heroId))
+      : [];
+    const needsLoadout = loadoutQueue.length > 0;
     if (needsLoadout) pharmacistLoadoutDraft = getPlayerPharmacistLoadout();
+    if (needsLoadout) elfLoadoutDraft = getPlayerElfLoadout();
     state.mode = battleMode === "team" ? "tactical-team" : battleMode === "trio" ? "tactical-trio" : "cpu";
     state.over = false;
     state.matchRecorded = false;
     state.pendingEndChoice = null;
-    state.tactical = { phase: needsLoadout ? "loadout" : "movement", selection: needsLoadout ? "loadout" : "move", path: [], selectedCardId: null, selectedTarget: null, selectedTargetId: null, selectedTargets: [], filter: state.tactical?.filter || "available", playerScore: 0, enemyScore: 0, objectiveHeld: {}, flames: [], winReason: "", resolving: false, loadoutPending: needsLoadout, standbyAutoPassScheduled: false, battleMageImprint: false, prepRound: true, pendingEndChoice: null, battleMode, online: null, activePlayerId: "p1", lockedPlans: { movement: {}, action: {} }, spawnPoints: {} };
+    state.tactical = { phase: needsLoadout ? "loadout" : "movement", selection: needsLoadout ? "loadout" : "move", path: [], selectedCardId: null, selectedTarget: null, selectedTargetId: null, selectedTargets: [], filter: normalizeActionFilter(state.tactical?.filter), playerScore: 0, enemyScore: 0, objectiveHeld: {}, flames: [], temporaryThinWalls: [], winReason: "", resolving: false, loadoutPending: needsLoadout, loadoutQueue, loadoutIndex: 0, standbyAutoPassScheduled: false, battleMageImprint: false, prepRound: true, pendingEndChoice: null, battleMode, online: null, activePlayerId: "p1", lockedPlans: { movement: {}, action: {} }, spawnPoints: {} };
     const playerName = normalizePlayerName(tacticalUi.playerName.value);
     tacticalUi.playerName.value = playerName;
     writeStorage(STORAGE_KEYS.playerName, playerName);
-    state.player = makeFighter(playerName, tacticalUi.playerHero.value, { pharmacistLoadout: getConfiguredPharmacistLoadout() });
-    state.playerB = battleMode === "team" ? makeFighter(`${playerName} B`, tacticalUi.playerBHero.value, { pharmacistLoadout: getConfiguredPharmacistLoadout() }) : null;
+    state.player = makeFighter(playerName, tacticalUi.playerHero.value, { pharmacistLoadout: getConfiguredPharmacistLoadout(), elfLoadout: getConfiguredElfLoadout() });
+    state.playerB = battleMode === "team" ? makeFighter(`${playerName} B`, tacticalUi.playerBHero.value, { pharmacistLoadout: getConfiguredPharmacistLoadout(), elfLoadout: getConfiguredElfLoadout() }) : null;
     state.enemy = makeFighter(["trio", "team"].includes(battleMode) ? "电脑 A" : "电脑", tacticalUi.enemyHero.value);
     state.enemyB = ["trio", "team"].includes(battleMode) ? makeFighter("电脑 B", tacticalUi.enemyBHero.value) : null;
     state.player.id = "p1";
@@ -1244,16 +1522,24 @@
     return [...ACTIONS, ...getHeroActions(fighter)];
   }
 
+  function normalizeActionFilter(filter) {
+    return ACTION_FILTERS.has(filter) ? filter : "recommended";
+  }
+
   function getActionTargetingMode(action) {
     if (!action) return "none";
     if (action.tacticalEffect === "firebomb") return "tile-pair";
-    if (action.kind === "attack") return "adjacent-tile";
+    if (action.effects?.buildThinWall) return "neighbor-tile";
+    if (action.kind === "attack") return "any-fighter-range";
     if (action.id === "astrologer-predict") return "enemy-range";
+    if (action.id === "mage-lightning") return "any-fighter-range";
+    if (action.id === "mage-thunder-strike") return "enemy-range";
+    if (["elf-elven-aura", "elf-holy-aura", "elf-energy-transfer"].includes(action.id)) return "ally";
     if (isTeamBattle() && ["priest-shield", "priest-heal", "pharmacist-invincible-potion"].includes(action.id)) return "ally";
     // In this 1v1 prototype, self-support skills retain their legacy default
     // target.  Priest's ally targeting remains available to the retained melee
     // rules, while the map shell only asks for enemy tiles when required.
-    if (["astrologer-drain", "pharmacist-poison", "pharmacist-revive", "dancer-spin", "dancer-grand-spin"].includes(action.id)) return "enemy";
+    if (["astrologer-drain", "pharmacist-poison", "pharmacist-revive", "dancer-spin", "dancer-grand-spin", "elf-bind"].includes(action.id)) return "enemy";
     return "none";
   }
 
@@ -1320,7 +1606,7 @@
   function isWithinAttackRange(source, target, action) {
     const distance = getActionRange(action);
     const steps = getRouteDistance(source, target, distance);
-    return steps >= 1 && steps <= distance;
+    return steps >= 0 && steps <= distance;
   }
 
   function getRouteDistance(source, target, maxSteps = Infinity, map = TACTICAL_MAP) {
@@ -1365,6 +1651,7 @@
   }
 
   function renderTactical() {
+    syncTutorialProgress();
     const tactical = state.tactical;
     const visualPhase = state.over ? "finished" : tactical.phase;
     tacticalUi.shell.dataset.phase = visualPhase;
@@ -1376,6 +1663,7 @@
     tacticalUi.menuBackdrop.classList.toggle("is-map-editing", mapEditor.active);
     tacticalUi.menuButton.setAttribute("aria-expanded", String(tacticalMenuOpen));
     tacticalUi.round.textContent = isPreparationRound() ? "预备回合" : `第 ${state.round} 回合`;
+    if (tacticalUi.mapName) tacticalUi.mapName.textContent = getCurrentMapName();
     tacticalUi.modeLabel.textContent = tactical.battleMode === "online-team" ? "在线 2v2" : tactical.battleMode === "online" ? "在线 1v1" : tactical.battleMode === "team" ? "2v2 小队战" : tactical.battleMode === "trio" ? "1v2 围攻" : "1v1 战术";
     tacticalUi.phase.textContent = tactical.phase === "resolving" ? "结算阶段" : state.over ? "对局结束" : tactical.phase === "loadout" ? "配药阶段" : isPreparationRound() ? "预备移动" : tactical.phase === "movement" ? "移动阶段" : "出招阶段";
     tacticalUi.phase.dataset.phase = visualPhase;
@@ -1394,16 +1682,58 @@
     tacticalUi.mapHint.textContent = getMapHint();
     const activePlayer = getActivePlayer();
     renderCombatant(tacticalUi.playerCard, activePlayer, isTeamBattle() ? `当前操控 · ${activePlayer.label}` : "玩家", "player");
-    renderCombatant(tacticalUi.enemyCard, state.enemy, state.enemyB ? "电脑 A" : "敌方", "enemy");
-    tacticalUi.enemyBCard.hidden = !state.enemyB;
-    if (state.enemyB) renderCombatant(tacticalUi.enemyBCard, state.enemyB, "电脑 B", "enemy");
+    const compactEnemyTeam = isTeamBattle();
+    tacticalUi.enemyCard.hidden = compactEnemyTeam;
+    tacticalUi.enemyBCard.hidden = compactEnemyTeam || !state.enemyB;
+    if (!compactEnemyTeam) {
+      renderCombatant(tacticalUi.enemyCard, state.enemy, state.enemyB ? "电脑 A" : "敌方", "enemy");
+      if (state.enemyB) renderCombatant(tacticalUi.enemyBCard, state.enemyB, "电脑 B", "enemy");
+    }
     renderPlayerTeamOverview();
     renderEnemyTeamOverview();
     renderMap();
     renderCards();
     renderPreview();
     renderMapEditor();
+    renderTutorialGuide();
     schedulePuppetStandbyPass();
+    publishTactical3dSnapshot();
+  }
+
+  function getTactical3dSnapshot() {
+    const map = getRenderedMapConfig();
+    const tactical = state.tactical;
+    const active = getActivePlayer();
+    const reachable = !mapEditor.active && tactical.phase === "movement"
+      ? [...getReachableTiles(active.position, getCurrentMoveLimit(), getVisibleOccupiedTiles(active)).values()].map((entry) => cloneTile(entry.tile)) : [];
+    const fighters = getAllTacticalFighters().filter((fighter) => !fighter.flags?.tacticalRespawnRound).map((fighter) => {
+      const team = getFighterTeam(fighter);
+      const visible = team === "player" || isFighterVisibleToTeam(fighter, "player");
+      return {
+        id: fighter.id,
+        team,
+        position: cloneTile(fighter.position),
+        heroId: fighter.heroId,
+        label: fighter.label,
+        hp: fighter.hp,
+        xp: fighter.xp,
+        active: fighter.id === active.id,
+        visible,
+        avatar: fighter.heroId === "werewolf" && fighter.flags?.berserk ? HERO_AVATARS.werewolfBerserk : HERO_AVATARS[fighter.heroId],
+      };
+    });
+    return {
+      rows: map.rows, cols: map.cols, phase: tactical.phase, selection: tactical.selection,
+      objective: cloneTile(map.objective), walls: map.walls.map(cloneTile), bushes: map.bushes.map(cloneTile), energyTiles: map.energyTiles.map(cloneTile), thinWalls: map.thinWalls.slice(),
+      flames: (tactical.flames || []).map((flame) => cloneTile(flame.position || flame)),
+      path: tactical.path.map(cloneTile), reachable, targetable: getTargetableTiles().map(cloneTile), selectedTargets: getSelectedTargets().map(cloneTile), fighters,
+    };
+  }
+
+  function publishTactical3dSnapshot() {
+    const snapshot = getTactical3dSnapshot();
+    window.__JI_TACTICAL_3D_SNAPSHOT__ = snapshot;
+    window.renderJiTactical3d?.(snapshot);
   }
 
   function renderPlayerTeamOverview() {
@@ -1476,10 +1806,10 @@
       const identity = document.createElement("span"); identity.className = "enemy-team-identity";
       const name = document.createElement("strong"); name.textContent = concealed ? "未发现目标" : fighter.label;
       const stats = document.createElement("span"); stats.textContent = concealed ? "HP ? · XP ?" : `${formatTacticalHearts(fighter)} · ${fighter.xp} XP`;
-      identity.append(name, stats);
       const stateText = document.createElement("span"); stateText.className = "enemy-team-state";
       stateText.textContent = concealed ? "位置未知" : fighter.flags?.tacticalRespawnRound ? `R${fighter.flags.tacticalRespawnRound} 复活` : isFighterDefeated(fighter) ? "出局" : isSelected ? "已选目标" : `位置 ${coordName(fighter.position)}`;
-      member.append(avatar, identity, stateText);
+      identity.append(name, stats, stateText);
+      member.append(avatar, identity);
       members.append(member);
     }
     overview.append(heading, members);
@@ -1490,6 +1820,7 @@
     if (state.over) return state.tactical.winReason || "对局结束。点击重开开始新战局。";
     if (isTacticalOnline() && !getTacticalOnline()?.initialized) return "房间已创建，等待另一位玩家加入。";
     if (isPharmacistLoadoutPhase()) return "药师开局需要先在行动卡区域选择 2 个配方，确认后进入预备移动。";
+    if (isElfLoadoutPhase()) return "精灵开局需要先在行动卡区域选择 2 个祝福，确认后进入预备移动。";
     if (state.tactical.phase === "resolving") return "双方计划已揭示，正在同时结算。";
     if (isPreparationRound()) return "预备回合：双方只能移动 1 格，不会触发出招。";
     if (state.tactical.phase === "movement") return isTeamBattle() ? `正在规划${getActivePlayer().label}：选择至多 1 格移动，两个己方计划锁定后四人同时移动。` : "先选择至多 1 格移动路径，锁定后双方同时移动。";
@@ -1499,6 +1830,8 @@
     }
     if (state.tactical.selection === "target") {
       if (getActionTargetingMode(action) === "ally") return "选择一名己方英雄作为辅助技能目标。";
+      if (getActionTargetingMode(action) === "neighbor-tile") return "选择周围六个格子之一，在你和该格之间筑起薄墙。";
+      if (getActionTargetingMode(action) === "any-fighter-range") return `选择距离 ${getActionRange(action)} 内任意英雄。`;
       return ["adjacent-tile", "enemy-range"].includes(getActionTargetingMode(action))
         ? `选择目标：敌方必须在距离 ${getActionRange(action)} 内。`
         : "选择敌方当前格作为技能目标。";
@@ -1588,6 +1921,36 @@
     avatar.append(image); return avatar;
   }
 
+  function getMapRenderSignature(map, tactical, activePlayer) {
+    const fighters = getAllTacticalFighters().map((fighter) => ({
+      id: fighter.id,
+      heroId: fighter.heroId,
+      hp: fighter.hp,
+      xp: fighter.xp,
+      position: fighter.position,
+      statuses: (fighter.statuses || []).map((status) => [status.id, status.turns]),
+      respawnRound: fighter.flags?.tacticalRespawnRound || 0,
+      berserk: Boolean(fighter.flags?.berserk),
+      flags: fighter.flags || {},
+    }));
+    return JSON.stringify({
+      map,
+      round: state.round,
+      phase: tactical.phase,
+      selection: tactical.selection,
+      activePlayerId: activePlayer?.id || "",
+      path: tactical.path,
+      selectedCardId: tactical.selectedCardId,
+      selectedTarget: tactical.selectedTarget,
+      selectedTargetId: tactical.selectedTargetId,
+      selectedTargets: tactical.selectedTargets,
+      flames: tactical.flames,
+      temporaryThinWalls: tactical.temporaryThinWalls,
+      mapEditor: mapEditor.active ? { tool: mapEditor.tool, anchor: mapEditor.anchor, draft: mapEditor.draft, spawns: mapEditor.spawns } : null,
+      fighters,
+    });
+  }
+
   function renderMap() {
     hideTileTooltip();
     const map = getRenderedMapConfig();
@@ -1597,64 +1960,138 @@
     const reachable = !mapEditor.active && tactical.phase === "movement"
       ? getReachableTiles(activePlayer.position, getCurrentMoveLimit(), getVisibleOccupiedTiles(activePlayer)) : new Map();
     const targetable = mapEditor.active ? [] : getTargetableTiles();
+    const signature = getMapRenderSignature(map, tactical, activePlayer);
+    if (signature === lastMapRenderSignature) return;
+    lastMapRenderSignature = signature;
     tacticalUi.map.textContent = "";
-    const columnLabels = document.createElement("div"); columnLabels.className = "hex-column-labels";
-    const columnSpacer = document.createElement("span"); columnSpacer.className = "hex-column-spacer"; columnLabels.append(columnSpacer);
+    const board = document.createElement("div");
+    board.className = "iso-battle-board";
+    board.setAttribute("role", "presentation");
+    const columnLabels = document.createElement("div"); columnLabels.className = "iso-column-labels";
+    const rowLabels = document.createElement("div"); rowLabels.className = "iso-row-labels";
+    const grid = document.createElement("div"); grid.className = "iso-battle-grid";
+    const thinWallLayer = document.createElement("div"); thinWallLayer.className = "iso-thin-wall-layer";
+    const unitLayer = document.createElement("div"); unitLayer.className = "iso-unit-layer";
+    // Keep the existing pointy-top game topology. These are only display coordinates:
+    // the wider footprint gives the board its oblique/isometric read without altering
+    // distance, neighbors, editor clicks, or tactical pathfinding.
+    const layout = { width: 1280, height: 800, originX: 112, originY: 104, dx: 140, dy: 84, oddOffset: 70, tileWidth: 140, tileHeight: 112 };
     for (let col = 0; col < map.cols; col += 1) {
-      const label = document.createElement("span"); label.className = "hex-column-label"; label.textContent = String(col + 1); columnLabels.append(label);
+      const label = document.createElement("span");
+      label.className = "iso-grid-label iso-column-label";
+      label.textContent = String(col + 1);
+      label.style.setProperty("--label-x", `${((layout.originX + col * layout.dx) / layout.width) * 100}%`);
+      columnLabels.append(label);
     }
-    tacticalUi.map.append(columnLabels);
     for (let row = 0; row < map.rows; row += 1) {
-      const hexRow = document.createElement("div"); hexRow.className = `hex-row ${row & 1 ? "is-offset" : ""}`;
-      const rowLabel = document.createElement("span"); rowLabel.className = "hex-row-label"; rowLabel.textContent = ROW_LABELS[row]; hexRow.append(rowLabel);
-      const tiles = document.createElement("div"); tiles.className = "hex-row-tiles";
+      const rowLabel = document.createElement("span");
+      rowLabel.className = "iso-grid-label iso-row-label";
+      rowLabel.textContent = ROW_LABELS[row];
+      rowLabel.style.setProperty("--label-y", `${((layout.originY + row * layout.dy) / layout.height) * 100}%`);
+      rowLabels.append(rowLabel);
       for (let col = 0; col < map.cols; col += 1) {
         const position = { row, col };
-        const terrainType = tileType(position, map);
-        const tile = document.createElement("button"); tile.type = "button"; tile.className = `map-tile hex-tile ${terrainType}`;
-        tile.dataset.row = String(row); tile.dataset.col = String(col); tile.setAttribute("role", "gridcell"); tile.setAttribute("aria-label", `${coordName(position)} ${describeTerrain(position, map)}`);
-        const tooltipText = getTileTooltipText(position, map);
-        if (tooltipText) {
-          tile.classList.add("has-tile-tooltip");
-          tile.addEventListener("mouseenter", () => scheduleTileTooltip(tile, tooltipText));
-          tile.addEventListener("mouseleave", hideTileTooltip);
-          tile.addEventListener("focus", () => scheduleTileTooltip(tile, tooltipText));
-          tile.addEventListener("blur", hideTileTooltip);
-        }
-        if (mapEditor.active) {
-          tile.classList.add("editor-tile");
-          if (mapEditor.anchor && sameTile(position, mapEditor.anchor)) tile.classList.add("editor-anchor");
-        }
-        if (reachable.has(keyOf(position)) && !sameTile(position, activePlayer.position)) {
-          tile.classList.add("reachable");
-          const tollCost = getMovementTollCost(activePlayer, [position]);
-          if (tollCost > 0) {
-            tile.classList.add("reachable-toll", `reachable-toll-${tollCost}`);
-            tile.dataset.toll = String(tollCost);
-            tile.setAttribute("aria-label", `${tile.getAttribute("aria-label")}，进入需 ${tollCost} XP`);
-          }
-        }
-        if (pathKeys.has(keyOf(position))) { tile.classList.add("path"); tile.dataset.step = String(pathKeys.get(keyOf(position))); }
-        if (targetable.some((candidate) => sameTile(candidate, position))) tile.classList.add("targetable");
-        if (getSelectedTargets().some((candidate) => sameTile(candidate, position))) tile.classList.add("target-selected");
-        if (terrainType === "energy" || terrainType === "objective") tile.append(makeMapTargetMarker(terrainType));
-        appendThinWallEdges(tile, position, map);
-        if (getActiveFlame(position)) { tile.classList.add("flame"); tile.append(makeFlameToken()); }
-        if (mapEditor.active) {
-          const spawnMarkers = getSpawnMarkersAt(position);
-          if (spawnMarkers.length) tile.append(makeSpawnMarkerStack(spawnMarkers));
-        } else {
-          for (const player of getPlayerFighters()) if (sameTile(position, player.position) && !player.flags?.tacticalRespawnRound) tile.append(makeUnitToken(player, player.id === "p2" ? "player-b" : "player"));
-          if (sameTile(position, state.enemy.position) && isFighterVisibleToTeam(state.enemy, "player")) tile.append(makeUnitToken(state.enemy, "enemy"));
-          if (state.enemyB && sameTile(position, state.enemyB.position) && isFighterVisibleToTeam(state.enemyB, "player")) tile.append(makeUnitToken(state.enemyB, "enemy-b"));
-        }
-        if (isWall(position, map)) tile.setAttribute("aria-disabled", "true");
-        tile.disabled = !mapEditor.active && (state.over || tactical.phase === "resolving" || tactical.phase === "finished" || (tactical.phase !== "movement" && !(tactical.phase === "action" && tactical.selection === "target")));
-        tiles.append(tile);
+        const tile = makeRenderedMapTile(position, map, { activePlayer, reachable, targetable, pathKeys });
+        const { centerX, centerY } = getIsoTileCenter(position, layout);
+        tile.classList.add("iso-tile");
+        tile.style.setProperty("--iso-left", `${((centerX - layout.tileWidth / 2) / layout.width) * 100}%`);
+        tile.style.setProperty("--iso-top", `${((centerY - layout.tileHeight / 2) / layout.height) * 100}%`);
+        tile.style.setProperty("--iso-width", `${(layout.tileWidth / layout.width) * 100}%`);
+        tile.style.setProperty("--iso-height", `${(layout.tileHeight / layout.height) * 100}%`);
+        grid.append(tile);
       }
-      hexRow.append(tiles);
-      tacticalUi.map.append(hexRow);
     }
+    appendThinWallOverlay(thinWallLayer, map, layout);
+    appendMapUnits(unitLayer, layout);
+    board.append(columnLabels, rowLabels, grid, thinWallLayer, unitLayer);
+    tacticalUi.map.append(board);
+  }
+
+  function getIsoTileCenter(position, layout) {
+    return {
+      centerX: layout.originX + position.col * layout.dx + ((position.row & 1) ? layout.oddOffset : 0),
+      centerY: layout.originY + position.row * layout.dy,
+    };
+  }
+
+  function appendMapUnits(unitLayer, layout) {
+    const addUnit = (fighter, side) => {
+      if (!fighter?.position || fighter.flags?.tacticalRespawnRound) return;
+      const { centerX, centerY } = getIsoTileCenter(fighter.position, layout);
+      const unit = makeUnitToken(fighter, side);
+      unit.classList.add("map-unit");
+      unit.style.setProperty("--unit-left", `${(centerX / layout.width) * 100}%`);
+      unit.style.setProperty("--unit-top", `${(centerY / layout.height) * 100}%`);
+      unitLayer.append(unit);
+    };
+    for (const player of getPlayerFighters()) addUnit(player, player.id === "p2" ? "player-b" : "player");
+    if (state.enemy && isFighterVisibleToTeam(state.enemy, "player")) addUnit(state.enemy, "enemy");
+    if (state.enemyB && isFighterVisibleToTeam(state.enemyB, "player")) addUnit(state.enemyB, "enemy-b");
+  }
+
+  function getTacticalFacingBetween(start, end) {
+    if (!start || !end || sameTile(start, end)) return null;
+    const startX = start.col + ((start.row & 1) ? 0.5 : 0);
+    const endX = end.col + ((end.row & 1) ? 0.5 : 0);
+    const horizontal = endX - startX;
+    const vertical = end.row - start.row;
+    if (!vertical) return horizontal >= 0 ? "right" : "left";
+    if (vertical < 0) return horizontal >= 0 ? "upRight" : "upLeft";
+    return horizontal >= 0 ? "downRight" : "downLeft";
+  }
+
+  function getTacticalFacing(fighter) {
+    return fighter?.facing || "right";
+  }
+
+  function getTacticalStandeeVisualFacing(facing) {
+    return ({ left: "right", upLeft: "upRight", downLeft: "downRight" })[facing] || facing || "right";
+  }
+
+  function applyTacticalFacing(element, facing) {
+    if (!element || !facing) return;
+    element.classList.remove("facing-right", "facing-left", "facing-up-right", "facing-up-left", "facing-down-right", "facing-down-left");
+    element.classList.add(`facing-${facing.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`);
+  }
+
+  function makeRenderedMapTile(position, map, context) {
+    const { activePlayer, reachable, targetable, pathKeys } = context;
+    const terrainType = tileType(position, map);
+    const tile = document.createElement("button"); tile.type = "button"; tile.className = `map-tile hex-tile ${terrainType}`;
+    tile.dataset.row = String(position.row); tile.dataset.col = String(position.col); tile.setAttribute("role", "gridcell"); tile.setAttribute("aria-label", `${coordName(position)} ${describeTerrain(position, map)}`);
+    const tooltipText = getTileTooltipText(position, map);
+    if (tooltipText) {
+      tile.classList.add("has-tile-tooltip");
+      tile.addEventListener("mouseenter", () => scheduleTileTooltip(tile, tooltipText));
+      tile.addEventListener("mouseleave", hideTileTooltip);
+      tile.addEventListener("focus", () => scheduleTileTooltip(tile, tooltipText));
+      tile.addEventListener("blur", hideTileTooltip);
+    }
+    if (mapEditor.active) {
+      tile.classList.add("editor-tile");
+      if (mapEditor.anchor && sameTile(position, mapEditor.anchor)) tile.classList.add("editor-anchor");
+    }
+    if (reachable.has(keyOf(position)) && !sameTile(position, activePlayer.position)) {
+      tile.classList.add("reachable");
+      const tollCost = getMovementTollCost(activePlayer, [position]);
+      if (tollCost > 0) {
+        tile.classList.add("reachable-toll", `reachable-toll-${tollCost}`);
+        tile.dataset.toll = String(tollCost);
+        tile.setAttribute("aria-label", `${tile.getAttribute("aria-label")}，进入需 ${tollCost} XP`);
+      }
+    }
+    if (pathKeys.has(keyOf(position))) { tile.classList.add("path"); tile.dataset.step = String(pathKeys.get(keyOf(position))); }
+    if (targetable.some((candidate) => sameTile(candidate, position))) tile.classList.add("targetable");
+    if (getSelectedTargets().some((candidate) => sameTile(candidate, position))) tile.classList.add("target-selected");
+    if (terrainType === "energy" || terrainType === "objective") tile.append(makeMapTargetMarker(terrainType));
+    if (getActiveFlame(position)) { tile.classList.add("flame"); tile.append(makeFlameToken()); }
+    if (mapEditor.active) {
+      const spawnMarkers = getSpawnMarkersAt(position);
+      if (spawnMarkers.length) tile.append(makeSpawnMarkerStack(spawnMarkers));
+    }
+    if (isWall(position, map)) tile.setAttribute("aria-disabled", "true");
+    tile.disabled = !mapEditor.active && (state.over || state.tactical.phase === "resolving" || state.tactical.phase === "finished" || (state.tactical.phase !== "movement" && !(state.tactical.phase === "action" && state.tactical.selection === "target")));
+    return tile;
   }
 
   function getSpawnMarkersAt(position) {
@@ -1705,24 +2142,109 @@
       .some((tile) => hasThinWallBetween(position, tile, map));
   }
 
-  function appendThinWallEdges(tile, position, map = TACTICAL_MAP) {
-    for (const neighbor of directionalNeighbors(position)) {
-      if (!inBounds(neighbor, map) || !hasThinWallBetween(position, neighbor, map)) continue;
-      const edge = document.createElement("span");
-      edge.className = `thin-wall-edge ${getThinWallEdgeClass(position, neighbor)}`;
-      edge.setAttribute("aria-hidden", "true");
-      tile.append(edge);
+  // Thin walls are logical edges, not tile contents. Rendering them in a shared
+  // overlay guarantees one sprite per edge, even when both neighboring tiles
+  // are present, and keeps the stonework centered on the actual shared side.
+  function appendThinWallOverlay(layer, map, layout) {
+    const edges = collectThinWallGeometry(map, layout);
+    validateThinWallGeometry(edges, map, layout);
+    for (const edge of edges) {
+      const wall = document.createElement("span");
+      wall.className = `iso-thin-wall wall-${edge.orientation}`;
+      wall.dataset.edgeKey = edge.key;
+      wall.style.setProperty("--wall-x", `${(edge.center.x / layout.width) * 100}%`);
+      wall.style.setProperty("--wall-y", `${(edge.center.y / layout.height) * 100}%`);
+      wall.setAttribute("aria-hidden", "true");
+      layer.append(wall);
     }
   }
 
-  function getThinWallEdgeClass(position, neighbor) {
-    const index = directionalNeighbors(position).findIndex((tile) => sameTile(tile, neighbor));
-    if (index === 0) return "edge-west";
-    if (index === 1) return "edge-east";
-    if (index === 2) return position.row & 1 ? "edge-north-west" : "edge-north-east";
-    if (index === 3) return position.row & 1 ? "edge-north-east" : "edge-north-west";
-    if (index === 4) return position.row & 1 ? "edge-south-west" : "edge-south-east";
-    return position.row & 1 ? "edge-south-east" : "edge-south-west";
+  function collectThinWallGeometry(map = TACTICAL_MAP, layout) {
+    const edges = [];
+    const seen = new Set();
+    for (let row = 0; row < map.rows; row += 1) {
+      for (let col = 0; col < map.cols; col += 1) {
+        const first = { row, col };
+        for (const second of directionalNeighbors(first)) {
+          if (!inBounds(second, map) || !hasThinWallBetween(first, second, map)) continue;
+          const key = edgeKey(first, second);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const shared = getSharedHexEdge(first, second, layout);
+          if (!shared) continue;
+          edges.push({ key, first, second, ...shared });
+        }
+      }
+    }
+    return edges;
+  }
+
+  function getSharedHexEdge(first, second, layout) {
+    const firstVertices = getIsoHexVertices(first, layout);
+    const secondVertices = getIsoHexVertices(second, layout);
+    const matches = [];
+    for (const point of firstVertices) {
+      let nearest = null;
+      for (const candidate of secondVertices) {
+        const distance = Math.hypot(point.x - candidate.x, point.y - candidate.y);
+        if (!nearest || distance < nearest.distance) nearest = { point, candidate, distance };
+      }
+      if (nearest && nearest.distance < 0.01) {
+        const midpoint = {
+          x: (nearest.point.x + nearest.candidate.x) / 2,
+          y: (nearest.point.y + nearest.candidate.y) / 2,
+        };
+        if (!matches.some((match) => Math.hypot(match.x - midpoint.x, match.y - midpoint.y) < 0.01)) matches.push(midpoint);
+      }
+    }
+    if (matches.length !== 2) return null;
+    const [start, end] = matches;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const orientation = Math.abs(dx) < Math.abs(dy) * 0.35
+      ? "vertical"
+      : dx * dy < 0 ? "slash" : "backslash";
+    return {
+      start,
+      end,
+      center: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 },
+      length: Math.hypot(dx, dy),
+      orientation,
+    };
+  }
+
+  function getIsoHexVertices(position, layout) {
+    const { centerX, centerY } = getIsoTileCenter(position, layout);
+    const halfWidth = layout.tileWidth / 2;
+    const quarterHeight = layout.tileHeight / 4;
+    const halfHeight = layout.tileHeight / 2;
+    return [
+      { x: centerX, y: centerY - halfHeight },
+      { x: centerX + halfWidth, y: centerY - quarterHeight },
+      { x: centerX + halfWidth, y: centerY + quarterHeight },
+      { x: centerX, y: centerY + halfHeight },
+      { x: centerX - halfWidth, y: centerY + quarterHeight },
+      { x: centerX - halfWidth, y: centerY - quarterHeight },
+    ];
+  }
+
+  function validateThinWallGeometry(edges, map, layout) {
+    const expected = new Set();
+    for (let row = 0; row < map.rows; row += 1) {
+      for (let col = 0; col < map.cols; col += 1) {
+        const first = { row, col };
+        for (const second of directionalNeighbors(first)) {
+          if (inBounds(second, map) && hasThinWallBetween(first, second, map)) expected.add(edgeKey(first, second));
+        }
+      }
+    }
+    const actual = new Set(edges.map((edge) => edge.key));
+    const hasDuplicate = actual.size !== edges.length;
+    const hasMissing = Array.from(expected).some((key) => !actual.has(key));
+    const hasInvalidGeometry = edges.some((edge) => !Number.isFinite(edge.center.x)
+      || !Number.isFinite(edge.center.y) || edge.length <= 0 || !edge.orientation);
+    console.assert(!hasDuplicate && !hasMissing && !hasInvalidGeometry,
+      "Thin-wall overlay geometry failed validation.", { expected: expected.size, actual: edges.length, layout });
   }
 
   function scheduleTileTooltip(tile, text) {
@@ -1755,9 +2277,15 @@
   }
   function makeFlameToken() { const flame = document.createElement("span"); flame.className = "flame-token"; flame.setAttribute("aria-hidden", "true"); return flame; }
   function makeUnitToken(fighter, side) {
-    const unit = document.createElement("span"); unit.className = `unit-token ${side}`; unit.dataset.fighterId = fighter.id; unit.title = `${getHeroDisplayName(fighter.hero)} ${formatHearts(Math.max(0, fighter.hp))}`;
+    const unit = document.createElement("span"); unit.className = `unit-token ${side} hero-${fighter.heroId}`; unit.dataset.fighterId = fighter.id; unit.title = `${getHeroDisplayName(fighter.hero)} ${formatHearts(Math.max(0, fighter.hp))}`;
     if (isFighterDefeated(fighter)) { unit.classList.add("is-out"); unit.textContent = "OUT"; return unit; }
-    const source = fighter.heroId === "werewolf" && fighter.flags?.berserk ? HERO_AVATARS.werewolfBerserk : HERO_AVATARS[fighter.heroId];
+    const standee = getTacticalStandeeSource(fighter);
+    if (standee) {
+      unit.classList.add("unit-standee");
+      applyTacticalFacing(unit, getTacticalFacing(fighter));
+      preloadTacticalStandeeFrames(fighter);
+    }
+    const source = standee || (fighter.heroId === "werewolf" && fighter.flags?.berserk ? HERO_AVATARS.werewolfBerserk : HERO_AVATARS[fighter.heroId]);
     if (!source) { unit.textContent = side === "player" ? "你" : side === "enemy-b" ? "B" : "A"; return unit; }
     const image = document.createElement("img"); image.src = source; image.alt = ""; image.addEventListener("error", () => { image.remove(); unit.textContent = side === "player" ? "你" : side === "enemy-b" ? "B" : "A"; }, { once: true }); unit.append(image); return unit;
   }
@@ -1817,8 +2345,105 @@
     return effect;
   }
 
+  function playTacticalUnitCue(cue, index = 0) {
+    const fighter = typeof cue?.fighterId === "string" ? getFighterById(cue.fighterId) : cue?.fighter;
+    const token = getMapUnitElement(fighter);
+    const center = getElementCenter(token || getMapTileElement(fighter?.position));
+    if (!center) return;
+    const amount = Math.max(0, Number(cue?.amount) || 0);
+    const effect = createTacticalFx(`tactical-fx-unit-cue ${cue?.kind || "buff"}`, {
+      ...center,
+      y: center.y - Math.max(30, center.height * 0.7) - index * 12,
+    }, Math.max(38, Math.min(center.width, 62)));
+    if (!effect) return;
+
+    const badge = document.createElement("span");
+    badge.className = "unit-cue-badge";
+    const glyph = document.createElement("span");
+    glyph.className = "unit-cue-glyph";
+    const label = document.createElement("span");
+    label.className = "unit-cue-label";
+    const burst = document.createElement("span");
+    burst.className = "unit-cue-burst";
+    const labels = { heal: amount ? `+${amount}` : "+HP", damage: amount ? `-${amount}` : "-HP", buff: "强化", debuff: "异常" };
+    const glyphs = { heal: "+", damage: "!", buff: "^", debuff: "v" };
+    glyph.textContent = glyphs[cue?.kind] || glyphs.buff;
+    label.textContent = labels[cue?.kind] || labels.buff;
+    effect.append(burst, badge);
+    badge.append(glyph, label);
+
+    const duration = getTacticalFxDuration(720);
+    const animation = effect.animate?.([
+      { opacity: 0, transform: "translate(-50%, -20%) scale(.62)" },
+      { opacity: 1, transform: "translate(-50%, -62%) scale(1)", offset: 0.2 },
+      { opacity: 1, transform: "translate(-50%, -104%) scale(.96)", offset: 0.66 },
+      { opacity: 0, transform: "translate(-50%, -138%) scale(.84)" },
+    ], { duration, easing: "steps(6, end)" });
+    if (animation?.finished) animation.finished.catch(() => {}).finally(() => effect.remove());
+    else window.setTimeout(() => effect.remove(), duration);
+  }
+
+  function flushTacticalUnitCues() {
+    const cues = state.tactical?.visualCues || [];
+    if (!cues.length) return;
+    state.tactical.visualCues = [];
+    cues.slice(0, 8).forEach((cue, index) => playTacticalUnitCue(cue, index));
+  }
+
   function getFxAvatarSource(fighter) {
-    return fighter?.heroId === "werewolf" && fighter.flags?.berserk ? HERO_AVATARS.werewolfBerserk : HERO_AVATARS[fighter?.heroId];
+    return getTacticalStandeeSource(fighter) || (fighter?.heroId === "werewolf" && fighter.flags?.berserk ? HERO_AVATARS.werewolfBerserk : HERO_AVATARS[fighter?.heroId]);
+  }
+
+  function getTacticalStandeeSource(fighter, pose = "idle", frame = 0) {
+    const standee = TACTICAL_STANDEES[fighter?.heroId];
+    if (!standee) return null;
+    if (typeof standee === "string") return standee;
+    const resolvedPose = pose === "idle" && fighter?.statuses?.some((status) => status.id === "assassin-sneak") ? "sneak" : pose;
+    const poseFrames = standee[resolvedPose];
+    if (Array.isArray(poseFrames) && poseFrames.length) return poseFrames[frame % poseFrames.length];
+    const frames = Array.isArray(poseFrames)
+      ? poseFrames
+      : poseFrames?.[getTacticalStandeeVisualFacing(getTacticalFacing(fighter))] || poseFrames?.right || [];
+    if (Array.isArray(frames) && frames.length) return frames[frame % frames.length];
+    return standee.idle || null;
+  }
+
+  function getTacticalStandeeFrames(fighter, pose) {
+    const standee = TACTICAL_STANDEES[fighter?.heroId];
+    if (!standee || typeof standee === "string") return [];
+    const poseFrames = standee[pose];
+    if (Array.isArray(poseFrames)) return poseFrames;
+    return poseFrames?.[getTacticalStandeeVisualFacing(getTacticalFacing(fighter))] || poseFrames?.right || [];
+  }
+
+  function preloadTacticalStandeeFrames(fighter) {
+    const standee = TACTICAL_STANDEES[fighter?.heroId];
+    if (!standee || typeof standee === "string" || standee.preloaded) return;
+    standee.preloaded = true;
+    for (const pose of ["idle", "walk", "attack", "guard", "hit", "sneak", "drain", "predict"]) {
+      const sequences = Array.isArray(standee[pose]) ? [standee[pose]] : Object.values(standee[pose] || {});
+      for (const source of sequences.flat()) {
+        const image = new Image();
+        image.src = source;
+      }
+    }
+  }
+
+  function playTacticalStandeeFrames(element, fighter, pose, duration, { restore = true } = {}) {
+    const frames = getTacticalStandeeFrames(fighter, pose);
+    const image = element?.querySelector?.("img");
+    if (!frames.length || !image) return;
+    const frameDuration = Math.max(48, Math.floor(duration / frames.length));
+    let frameIndex = 0;
+    image.src = frames[frameIndex];
+    const timer = window.setInterval(() => {
+      frameIndex += 1;
+      image.src = frames[frameIndex % frames.length];
+    }, frameDuration);
+    window.setTimeout(() => {
+      window.clearInterval(timer);
+      if (restore && element.isConnected) image.src = getTacticalStandeeSource(fighter);
+    }, duration + 18);
   }
 
   function addFxImpact(center, style = "guard", delay = 0) {
@@ -1826,8 +2451,133 @@
     window.setTimeout(() => {
       const effect = createTacticalFx(`tactical-fx-impact ${style}`, center, Math.max(42, Math.min(center.width || 54, center.height || 54)));
       if (!effect) return;
+      if (style === "charge") {
+        effect.append(
+          Object.assign(document.createElement("span"), { className: "yin-yang-fish fish-a" }),
+          Object.assign(document.createElement("span"), { className: "yin-yang-fish fish-b" }),
+          Object.assign(document.createElement("span"), { className: "yin-yang-core" }),
+        );
+      }
       const duration = getTacticalFxDuration(300);
-      const animation = effect.animate?.([{ opacity: 0, transform: "translate(-50%, -50%) scale(0.25)" }, { opacity: 1, transform: "translate(-50%, -50%) scale(1.1)", offset: 0.4 }, { opacity: 0, transform: "translate(-50%, -50%) scale(1.55)" }], { duration, easing: "steps(4, end)" });
+      const frames = style === "charge"
+        ? [
+          { opacity: 0, transform: "translate(-50%, -50%) scale(0.32) rotate(-120deg)" },
+          { opacity: 1, transform: "translate(-50%, -50%) scale(1.06) rotate(60deg)", offset: 0.55 },
+          { opacity: 0, transform: "translate(-50%, -50%) scale(1.36) rotate(180deg)" },
+        ]
+        : [{ opacity: 0, transform: "translate(-50%, -50%) scale(0.25)" }, { opacity: 1, transform: "translate(-50%, -50%) scale(1.1)", offset: 0.4 }, { opacity: 0, transform: "translate(-50%, -50%) scale(1.55)" }];
+      const animation = effect.animate?.(frames, { duration, easing: style === "charge" ? "steps(8, end)" : "steps(4, end)" });
+      if (animation?.finished) animation.finished.catch(() => {}).finally(() => effect.remove());
+      else window.setTimeout(() => effect.remove(), duration);
+    }, delay);
+  }
+
+  function playTacticalFxSpriteFrames(effect, frames, duration) {
+    const image = effect?.querySelector("img");
+    if (!image || !frames?.length) return;
+    const frameDuration = Math.max(46, Math.floor(duration / frames.length));
+    let frameIndex = 0;
+    image.src = frames[frameIndex];
+    const timer = window.setInterval(() => {
+      frameIndex += 1;
+      image.src = frames[frameIndex % frames.length];
+    }, frameDuration);
+    window.setTimeout(() => window.clearInterval(timer), duration + 16);
+  }
+
+  function playIceCriticalFx(target, delay = 0) {
+    if (!target) return;
+    window.setTimeout(() => {
+      const duration = getTacticalFxDuration(540);
+      const effect = createTacticalFx("tactical-fx-ice-critical", {
+        ...target,
+        y: target.y - target.height * 1.7,
+      }, 86);
+      if (!effect) return;
+      const image = document.createElement("img");
+      image.alt = "";
+      effect.append(image);
+      const frames = [1, 2, 3, 4].map((frame) => `./assets/iso-arena/vfx/ice-sorcerer/frames/ice-critical-${frame}.png`);
+      playTacticalFxSpriteFrames(effect, frames, duration);
+      const travelY = target.height * 1.36;
+      const animation = effect.animate?.([
+        { opacity: 0, transform: "translate(-50%, -50%) scale(.65)" },
+        { opacity: 1, transform: `translate(-50%, calc(-50% + ${travelY}px)) scale(1)`, offset: 0.6 },
+        { opacity: 0, transform: `translate(-50%, calc(-50% + ${travelY + 6}px)) scale(1.14)`, offset: 1 },
+      ], { duration, easing: "steps(7, end)" });
+      if (animation?.finished) animation.finished.catch(() => {}).finally(() => effect.remove());
+      else window.setTimeout(() => effect.remove(), duration);
+    }, delay);
+  }
+
+  function playAstrologerPredictionRing(target, delay = 0) {
+    if (!target) return;
+    window.setTimeout(() => {
+      const duration = getTacticalFxDuration(980);
+      const effect = createTacticalFx("tactical-fx-astrologer-ring", {
+        ...target,
+        y: target.y - target.height * 0.94,
+      }, 82);
+      if (!effect) return;
+      const image = document.createElement("img");
+      image.alt = "";
+      effect.append(image);
+      const frames = [1, 2, 3, 4].map((frame) => `./assets/iso-arena/vfx/astrologer/frames/astrologer-prediction-ring-${frame}.png`);
+      playTacticalFxSpriteFrames(effect, frames, duration);
+      const animation = effect.animate?.([
+        { opacity: 0, transform: "translate(-50%, -50%) scale(.58)" },
+        { opacity: 1, transform: "translate(-50%, -50%) scale(1.04)", offset: 0.24 },
+        { opacity: .92, transform: "translate(-50%, -50%) scale(.96)", offset: 0.72 },
+        { opacity: 0, transform: "translate(-50%, -50%) scale(1.12)" },
+      ], { duration, easing: "steps(7, end)" });
+      if (animation?.finished) animation.finished.catch(() => {}).finally(() => effect.remove());
+      else window.setTimeout(() => effect.remove(), duration);
+    }, delay);
+  }
+
+  function playAstrologerMeteorFx(target, delay = 0) {
+    if (!target) return;
+    window.setTimeout(() => {
+      const duration = getTacticalFxDuration(610);
+      const effect = createTacticalFx("tactical-fx-astrologer-meteor", {
+        ...target,
+        y: target.y - target.height * 1.48,
+      }, 104);
+      if (!effect) return;
+      const image = document.createElement("img");
+      image.alt = "";
+      effect.append(image);
+      const frames = [1, 2, 3, 4].map((frame) => `./assets/iso-arena/vfx/astrologer/frames/astrologer-prediction-meteor-${frame}.png`);
+      playTacticalFxSpriteFrames(effect, frames, duration);
+      const fallDistance = target.height * 1.1;
+      const animation = effect.animate?.([
+        { opacity: 0, transform: "translate(-50%, -50%) scale(.62)" },
+        { opacity: 1, transform: "translate(-50%, calc(-50% + 28px)) scale(.9)", offset: 0.3 },
+        { opacity: 1, transform: `translate(-50%, calc(-50% + ${fallDistance}px)) scale(1.12)`, offset: 0.79 },
+        { opacity: 0, transform: `translate(-50%, calc(-50% + ${fallDistance + 8}px)) scale(1.32)` },
+      ], { duration, easing: "steps(8, end)" });
+      if (animation?.finished) animation.finished.catch(() => {}).finally(() => effect.remove());
+      else window.setTimeout(() => effect.remove(), duration);
+    }, delay);
+  }
+
+  function playAstrologerDrainFx(source, target, delay = 0) {
+    if (!source || !target) return;
+    window.setTimeout(() => {
+      const duration = getTacticalFxDuration(430);
+      const effect = createTacticalFx("tactical-fx-astrologer-drain-orb", {
+        ...target,
+        y: target.y - target.height * 0.34,
+      }, 30);
+      if (!effect) return;
+      const deltaX = source.x - target.x;
+      const deltaY = source.y - target.y - source.height * 0.25;
+      const animation = effect.animate?.([
+        { opacity: 0, transform: "translate(-50%, -50%) scale(.4)" },
+        { opacity: 1, transform: "translate(-50%, -50%) scale(1)", offset: .16 },
+        { opacity: 1, transform: `translate(calc(-50% + ${deltaX * .68}px), calc(-50% + ${deltaY * .68}px)) scale(.78)`, offset: .7 },
+        { opacity: 0, transform: `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px)) scale(.3)` },
+      ], { duration, easing: "steps(7, end)" });
       if (animation?.finished) animation.finished.catch(() => {}).finally(() => effect.remove());
       else window.setTimeout(() => effect.remove(), duration);
     }, delay);
@@ -1850,7 +2600,7 @@
   }
 
   function captureTacticalVisualSnapshot() {
-    return new Map(getAllTacticalFighters().map((fighter) => [fighter.id, { hp: fighter.hp, shield: fighter.flags?.puppetShield || 0 }]));
+    return new Map(getAllTacticalFighters().map((fighter) => [fighter.id, { hp: fighter.hp, xp: fighter.xp, shield: fighter.flags?.puppetShield || 0 }]));
   }
 
   async function animateTacticalMovement(movement) {
@@ -1869,23 +2619,37 @@
         if (entry.conflict && entry.contestedTile) addFxImpact(getElementCenter(getMapTileElement(entry.contestedTile)), "clash");
         continue;
       }
-      const size = Math.max(30, Math.min(start.width, start.height) * 0.78);
+      const facing = getTacticalFacingBetween(entry.start, entry.end);
+      if (facing) entry.fighter.facing = facing;
+      const hasStandee = Boolean(getTacticalStandeeSource(entry.fighter));
+      const size = hasStandee ? Math.max(28, Math.min(start.width, start.height) * 0.53) : Math.max(30, Math.min(start.width, start.height) * 0.78);
       const effect = createTacticalFx("tactical-fx-unit-move", start, size);
       if (!effect) continue;
+      if (hasStandee) {
+        effect.classList.add("has-standee", `hero-${entry.fighter.heroId}`);
+        applyTacticalFacing(effect, getTacticalFacing(entry.fighter));
+        effect.style.height = `${Math.round(size * 1.72)}px`;
+      }
       const source = getFxAvatarSource(entry.fighter);
       if (source) {
         const image = document.createElement("img"); image.src = source; image.alt = ""; effect.append(image);
       } else effect.textContent = entry.fighter.label.slice(0, 1);
+      if (hasStandee) playTacticalStandeeFrames(effect, entry.fighter, "walk", duration, { restore: false });
       const destinationToken = getMapUnitElement(entry.fighter);
-      if (destinationToken) { destinationToken.classList.add("fx-arriving"); arrivingTokens.push(destinationToken); }
+      if (destinationToken) {
+        applyTacticalFacing(destinationToken, getTacticalFacing(entry.fighter));
+        destinationToken.classList.add("fx-arriving");
+        arrivingTokens.push(destinationToken);
+      }
       const deltaX = end.x - start.x;
       const deltaY = end.y - start.y;
-      addFxImpact(start, "step");
-      window.setTimeout(() => addFxImpact(end, "land"), Math.max(1, duration - 110));
+//      addFxImpact(start, "step");
+   //   window.setTimeout(() => addFxImpact(end, "land"), Math.max(1, duration - 110));
+      const anchorY = hasStandee ? "-100%" : "-50%";
       effect.animate([
-        { opacity: 0, transform: "translate(-50%, -50%) scale(0.72)" },
-        { opacity: 1, transform: "translate(-50%, -50%) scale(1.06)", offset: 0.16 },
-        { opacity: 1, transform: `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px)) scale(1)` },
+        { opacity: 0, transform: `translate(-50%, ${anchorY}) scale(0.72)` },
+        { opacity: 1, transform: `translate(-50%, ${anchorY}) scale(1.06)`, offset: 0.16 },
+        { opacity: 1, transform: `translate(calc(-50% + ${deltaX}px), calc(${anchorY} + ${deltaY}px)) scale(1)` },
       ], { duration, easing: "steps(6, end)", fill: "forwards" });
       movingEffects.push(effect);
     }
@@ -1898,6 +2662,7 @@
     if (!entries?.length) return;
     clearTacticalFx();
     await waitForPaint();
+    flushTacticalUnitCues();
     const duration = getTacticalFxDuration(420);
     const effects = [];
     for (const entry of entries) {
@@ -1907,7 +2672,24 @@
       const style = getActionFxStyle(entry.action);
       const targets = getActionFxTargets(entry);
       const sourceToken = getMapUnitElement(entry.fighter);
-      if (sourceToken) sourceToken.classList.add(style === "guard" ? "fx-guard" : "fx-attacking");
+      const facingTarget = targets.find((target) => !sameTile(target, entry.fighter.position));
+      if (facingTarget) entry.fighter.facing = getTacticalFacingBetween(entry.fighter.position, facingTarget);
+      if (sourceToken) {
+        applyTacticalFacing(sourceToken, getTacticalFacing(entry.fighter));
+        sourceToken.classList.add(style === "guard" ? "fx-guard" : "fx-attacking");
+        const standeePose = style === "guard"
+          ? "guard"
+          : entry.action.id === "ji"
+            ? null
+            : entry.action.id === "assassin-sneak"
+              ? "sneak"
+              : entry.action.id === "astrologer-drain"
+                ? "drain"
+                : entry.action.id === "astrologer-predict"
+                  ? "predict"
+              : "attack";
+        if (standeePose) playTacticalStandeeFrames(sourceToken, entry.fighter, standeePose, duration);
+      }
       if (!targets.length) {
         addFxImpact(source, style === "guard" ? "guard" : "charge", 30);
         continue;
@@ -1915,8 +2697,38 @@
       for (const targetPosition of targets) {
         const target = getElementCenter(getMapTileElement(targetPosition));
         if (!target) continue;
-        const projectile = createTacticalFx(`tactical-fx-projectile ${style}`, source, style === "fire" ? 28 : 24);
+        const isAstrologerDrain = entry.action.id === "astrologer-drain";
+        const isAstrologerPredict = entry.action.id === "astrologer-predict";
+        const isAstrologerMeteor = entry.action.id === "astrologer-ghost-knife";
+        const fighterAtTarget = getFighterAt(targetPosition);
+        const before = fighterAtTarget ? snapshot?.get(fighterAtTarget.id) : null;
+        if (isAstrologerPredict) {
+          playAstrologerPredictionRing(target, Math.round(duration * .15));
+          continue;
+        }
+        if (isAstrologerDrain) {
+          const sourceBefore = snapshot?.get(entry.fighter.id);
+          const drained = Boolean(
+            (fighterAtTarget && before && fighterAtTarget.xp < before.xp)
+            || (sourceBefore && entry.fighter.xp > sourceBefore.xp),
+          );
+          if (drained) playAstrologerDrainFx(source, target, Math.round(duration * .18));
+          else addFxImpact(target, "guard", Math.round(duration * .4));
+          continue;
+        }
+        if (isAstrologerMeteor) {
+          playAstrologerMeteorFx(target, Math.round(duration * .08));
+          continue;
+        }
+        const isIceDagger = entry.action.id === "ice-dagger";
+        const projectile = createTacticalFx(`tactical-fx-projectile ${isIceDagger ? "ice-dagger" : style}`, source, isIceDagger ? 56 : style === "fire" ? 28 : 24);
         if (!projectile) continue;
+        if (isIceDagger) {
+          const image = document.createElement("img");
+          image.alt = "";
+          projectile.append(image);
+          playTacticalFxSpriteFrames(image.parentElement, [1, 2, 3, 4].map((frame) => `./assets/iso-arena/vfx/ice-sorcerer/frames/ice-shard-${frame}.png`), duration);
+        }
         const angle = Math.atan2(target.y - source.y, target.x - source.x) * 180 / Math.PI;
         const deltaX = target.x - source.x;
         const deltaY = target.y - source.y;
@@ -1927,16 +2739,21 @@
           { opacity: 0.25, transform: `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px)) rotate(${angle}deg) scale(0.8)` },
         ], { duration, easing: "steps(6, end)", fill: "forwards" });
         effects.push(projectile);
-        const fighterAtTarget = getFighterAt(targetPosition);
-        const before = fighterAtTarget ? snapshot?.get(fighterAtTarget.id) : null;
-        const damaged = Boolean(fighterAtTarget && before && (fighterAtTarget.hp < before.hp || (before.shield > (fighterAtTarget.flags?.puppetShield || 0))));
+        const hpLoss = fighterAtTarget && before ? Math.max(0, before.hp - fighterAtTarget.hp) : 0;
+        const damaged = Boolean(fighterAtTarget && before && (hpLoss > 0 || (before.shield > (fighterAtTarget.flags?.puppetShield || 0))));
+        const iceCritical = entry.fighter.heroId === "iceSorcerer" && entry.iceCritTargetIds?.includes(fighterAtTarget?.id);
         const impactStyle = style === "skill" && !damaged ? "support" : damaged ? "hit" : "guard";
         const token = fighterAtTarget ? getMapUnitElement(fighterAtTarget) : null;
-        if (token) token.classList.add(damaged ? "fx-hit" : impactStyle === "support" ? "fx-support" : "fx-guard");
+        if (token) {
+          token.classList.add(damaged ? "fx-hit" : impactStyle === "support" ? "fx-support" : "fx-guard");
+          if (damaged) playTacticalStandeeFrames(token, fighterAtTarget, "hit", Math.round(duration * 0.7));
+          else if (impactStyle === "guard") playTacticalStandeeFrames(token, fighterAtTarget, "guard", Math.round(duration * 0.7));
+        }
         addFxImpact(target, impactStyle, Math.round(duration * 0.58));
+        if (iceCritical) playIceCriticalFx(target, Math.round(duration * 0.24));
       }
     }
-    await pause(duration + 80);
+    await pause(duration + 220);
     for (const effect of effects) effect.remove();
     tacticalUi.map?.querySelectorAll(".fx-attacking, .fx-hit, .fx-guard, .fx-support").forEach((element) => element.classList.remove("fx-attacking", "fx-hit", "fx-guard", "fx-support"));
   }
@@ -1946,6 +2763,19 @@
     const action = getSelectedAction(); const mode = getActionTargetingMode(action);
     if (mode === "tile-pair") return getFirebombTargetableTiles();
     const activePlayer = getActivePlayer();
+    if (mode === "neighbor-tile") {
+      return directionalNeighbors(activePlayer.position)
+        .filter((tile) => inBounds(tile) && !isWall(tile) && !hasThinWallBetween(activePlayer.position, tile))
+        .map(cloneTile);
+    }
+    if (mode === "any-fighter-range") {
+      return getAllTacticalFighters()
+        .filter((fighter) => {
+          if (fighter !== activePlayer && getFighterTeam(fighter) === "enemy" && !isFighterVisibleToTeam(fighter, "player")) return false;
+          return canActionTargetFighter(action, fighter, activePlayer) && isWithinAttackRange(activePlayer.position, fighter.position, action);
+        })
+        .map((fighter) => cloneTile(fighter.position));
+    }
     if (mode === "ally") return getAlivePlayers().filter((fighter) => canActionTargetFighter(action, fighter, activePlayer)).map((fighter) => cloneTile(fighter.position));
     const candidates = getAliveEnemies().filter((fighter) => {
       if (!isFighterVisibleToTeam(fighter, "player")) return false;
@@ -1964,14 +2794,34 @@
       renderPharmacistLoadoutCards();
       return;
     }
+    if (isElfLoadoutPhase()) {
+      renderElfLoadoutCards();
+      return;
+    }
     tacticalUi.cards.textContent = "";
     tacticalUi.cards.classList.remove("is-loadout");
     tacticalUi.filters.hidden = false;
     if (tacticalUi.actionTitle) tacticalUi.actionTitle.textContent = "选择本回合动作";
-    const selected = state.tactical.selectedCardId;
+    state.tactical.filter = normalizeActionFilter(state.tactical.filter);
+    updateActionFilterButtons();
     const activePlayer = getActivePlayer();
-    const allActions = getAvailableTacticalActions(activePlayer).filter((action) => actionMatchesFilter(action, state.tactical.filter));
+    const allActions = getFilteredTacticalActions(activePlayer, state.tactical.filter);
+    if (state.tactical.selectedCardId && !allActions.some((action) => action.id === state.tactical.selectedCardId)) {
+      state.tactical.selectedCardId = null;
+      clearActionTargets();
+      state.tactical.battleMageImprint = false;
+    }
+    const selected = state.tactical.selectedCardId;
     tacticalUi.cards.classList.toggle("has-many-actions", allActions.length > 6);
+    if (!allActions.length) {
+      const empty = document.createElement("p");
+      empty.className = "card-empty-state";
+      empty.textContent = state.tactical.filter === "recommended"
+        ? "暂无推荐行动，可切到“当前可用”或“全部”查看完整行动卡。"
+        : "当前分类没有可显示的行动卡。";
+      tacticalUi.cards.append(empty);
+      return;
+    }
     for (const action of allActions) {
       const available = canUseAction(activePlayer, action) && !isPuppetInactive(activePlayer) && !state.over && state.tactical.phase === "action" && (!isTacticalOnline() || getTacticalOnline()?.initialized) && !state.tactical.resolving;
       const category = getActionCategory(action);
@@ -1979,7 +2829,7 @@
       card.disabled = !available; card.classList.toggle("selected", selected === action.id); card.setAttribute("aria-pressed", String(selected === action.id));
       const top = document.createElement("div"); top.className = "card-top";
       const title = document.createElement("strong"); title.className = "card-title"; title.textContent = action.name;
-      const cost = document.createElement("span"); cost.className = "card-cost"; cost.textContent = String(getCost(activePlayer, action));
+      const cost = document.createElement("span"); cost.className = "card-cost"; cost.textContent = getCardCostLabel(activePlayer, action);
       top.append(title, cost);
       const group = document.createElement("span"); group.className = "card-group"; group.textContent = getActionCategoryLabel(action);
       const specs = document.createElement("div"); specs.className = "card-specs";
@@ -2033,9 +2883,16 @@
       return entries;
     }
     const entries = [["类型", "技能"]];
+    if (action.effects?.lightningShardCost) entries.push(["消耗", `${action.effects.lightningShardCost}⚡`]);
+    if (action.effects?.mageLightning) entries.push(["强度", String(BALANCE.heroes.mage.lightningPower)]);
+    else if (action.effects?.skillAttackPower) entries.push(["强度", String(action.effects.skillAttackPower)]);
     if (getActionRange(action)) entries.push(["距离", String(getActionRange(action))]);
     else if (getDefense(fighter, action) > 0) entries.push(["防御", formatDefense(getDefense(fighter, action))]);
     return entries;
+  }
+
+  function getCardCostLabel(fighter, action) {
+    return action.effects?.lightningShardCost ? `${action.effects.lightningShardCost}⚡` : String(getCost(fighter, action));
   }
 
   function getCardEffectText(action, fighter) {
@@ -2046,17 +2903,85 @@
     return action.text || describeAction(action, fighter);
   }
 
+  function updateActionFilterButtons() {
+    if (!tacticalUi.filters) return;
+    for (const item of tacticalUi.filters.querySelectorAll("button")) {
+      item.setAttribute("aria-pressed", String(item.dataset.filter === state.tactical.filter));
+    }
+  }
+
+  function getFilteredTacticalActions(fighter, filter) {
+    const normalized = normalizeActionFilter(filter);
+    const actions = getAvailableTacticalActions(fighter);
+    if (normalized === "recommended") return getRecommendedTacticalActions(fighter, actions);
+    return actions.filter((action) => actionMatchesFilter(action, normalized));
+  }
+
+  function getRecommendedTacticalActions(fighter, actions = getAvailableTacticalActions(fighter)) {
+    if (!fighter || isPuppetInactive(fighter)) return [];
+    const usableActions = actions.filter((action) => canUseAction(fighter, action));
+    const recommendations = usableActions
+      .map((action, index) => ({ action, index, score: scoreRecommendedAction(fighter, action) }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .slice(0, RECOMMENDED_ACTION_LIMIT)
+      .map((entry) => entry.action);
+    return recommendations.length ? recommendations : usableActions.slice(0, RECOMMENDED_ACTION_LIMIT);
+  }
+
+  function scoreRecommendedAction(fighter, action) {
+    const category = getActionCategory(action);
+    const xp = fighter.xp || 0;
+    const hpRatio = fighter.maxHp ? fighter.hp / fighter.maxHp : 1;
+    const visibleEnemies = getVisibleTargetEnemies(fighter);
+    const adjacentThreats = visibleEnemies.filter((enemy) => getRouteDistance(fighter.position, enemy.position, 1) <= 1).length;
+    const rangeThreats = visibleEnemies.filter((enemy) => getRouteDistance(fighter.position, enemy.position, 2) <= 2).length;
+    if (action.kind === "charge") return xp <= 0 ? 100 : xp <= 2 ? 82 : rangeThreats ? 42 : 58;
+    if (action.kind === "defense") {
+      if (action.id === "def-small") return hpRatio <= 0.5 || adjacentThreats ? 78 : 62;
+      if (action.id === "def-mid") return xp >= 1 && (hpRatio <= 0.5 || adjacentThreats) ? 72 : 35;
+      if (action.id === "def-big") return xp >= 2 && hpRatio <= 0.5 ? 66 : 24;
+      return 30;
+    }
+    if (action.kind === "attack") {
+      const range = getActionRange(action);
+      const targetsInRange = visibleEnemies.filter((enemy) => getRouteDistance(fighter.position, enemy.position, range) <= range).length;
+      if (!targetsInRange && action.tacticalEffect !== "firebomb") return 0;
+      const power = getAttack(fighter, action);
+      const rangeBonus = range > 1 && !adjacentThreats ? 10 : 0;
+      const specialBonus = category === "special" ? 8 : 0;
+      return 48 + Math.min(power, 8) * 3 + rangeBonus + specialBonus + Math.min(targetsInRange, 2) * 5;
+    }
+    if (category === "skill") {
+      const mode = getActionTargetingMode(action);
+      const hasEnemyTarget = ["enemy", "enemy-range", "adjacent-tile"].includes(mode) && visibleEnemies.some((enemy) => getRouteDistance(fighter.position, enemy.position, getActionRange(action) || 1) <= (getActionRange(action) || 1));
+      const hasSupportTarget = ["ally", "any-fighter-range", "none"].includes(mode);
+      if (!hasEnemyTarget && !hasSupportTarget) return 25;
+      return 86 + (hasEnemyTarget ? 10 : 0);
+    }
+    return 20;
+  }
+
+  function getVisibleTargetEnemies(fighter) {
+    const enemies = getFighterTeam(fighter) === "enemy" ? getAlivePlayers() : getAliveEnemies();
+    const team = getFighterTeam(fighter);
+    return enemies.filter((enemy) => isFighterVisibleToTeam(enemy, team) && canFighterSee(fighter, enemy));
+  }
+
   function actionMatchesFilter(action, filter) {
     const activePlayer = getActivePlayer();
-    if (filter === "available") return !isPuppetInactive(activePlayer) && canUseAction(activePlayer, action);
-    return filter === "all" || getActionCategory(action) === filter;
+    const normalized = normalizeActionFilter(filter);
+    if (normalized === "available") return !isPuppetInactive(activePlayer) && canUseAction(activePlayer, action);
+    if (normalized === "all") return true;
+    if (normalized === "recommended") return getRecommendedTacticalActions(activePlayer).some((recommended) => recommended.id === action.id);
+    return !isPuppetInactive(activePlayer) && canUseAction(activePlayer, action) && getActionCategory(action) === normalized;
   }
 
   function cycleAvailableAction() {
     const activePlayer = getActivePlayer();
     if (state.over || state.tactical.phase !== "action" || isPuppetInactive(activePlayer)) return;
-    const actions = getAvailableTacticalActions(activePlayer)
-      .filter((action) => actionMatchesFilter(action, state.tactical.filter) && canUseAction(activePlayer, action));
+    const actions = getFilteredTacticalActions(activePlayer, state.tactical.filter)
+      .filter((action) => canUseAction(activePlayer, action));
     if (!actions.length) return;
     const currentIndex = actions.findIndex((action) => action.id === state.tactical.selectedCardId);
     const nextAction = actions[(currentIndex + 1) % actions.length];
@@ -2065,6 +2990,19 @@
     if (!isBattleMageImprintEligible(nextAction)) state.tactical.battleMageImprint = false;
     state.tactical.selection = getActionTargetingMode(nextAction) === "none" ? "action" : "target";
     renderTactical();
+  }
+
+  function selectTacticalAction(actionId) {
+    const activePlayer = getActivePlayer();
+    if (state.over || state.tactical.phase !== "action" || state.tactical.resolving || isPuppetInactive(activePlayer)) return false;
+    const action = getActionById(actionId, activePlayer);
+    if (!action || !canUseAction(activePlayer, action)) return false;
+    state.tactical.selectedCardId = action.id;
+    clearActionTargets();
+    if (!isBattleMageImprintEligible(action)) state.tactical.battleMageImprint = false;
+    state.tactical.selection = getActionTargetingMode(action) === "none" ? "action" : "target";
+    renderTactical();
+    return true;
   }
 
   function pageTacticalCards(direction) {
@@ -2095,7 +3033,8 @@
   function targetModeLabel(action) {
     const mode = getActionTargetingMode(action);
     if (mode === "tile-pair") return "选择两个连续的相邻格";
-    return ["adjacent-tile", "enemy-range"].includes(mode) ? `需要选择 ${getActionRange(action)} 格内目标` : mode === "enemy" ? "需要选择敌方目标格" : mode === "ally" ? "需要选择己方目标" : "不需要目标";
+    if (mode === "neighbor-tile") return "选择相邻 1 格筑墙";
+    return ["adjacent-tile", "enemy-range"].includes(mode) ? `需要选择 ${getActionRange(action)} 格内目标` : mode === "any-fighter-range" ? `需要选择 ${getActionRange(action)} 格内任意英雄` : mode === "enemy" ? "需要选择敌方目标格" : mode === "ally" ? "需要选择己方目标" : "不需要目标";
   }
 
   function renderPreview() {
@@ -2119,6 +3058,20 @@
       tacticalUi.lock.disabled = !ready;
       tacticalUi.cancel.textContent = "清空配药";
       tacticalUi.cancel.disabled = !pharmacistLoadoutDraft.length;
+      return;
+    }
+    if (isElfLoadoutPhase()) {
+      const required = getRequiredElfLoadoutSize();
+      const ready = elfLoadoutDraft.length === required;
+      const names = elfLoadoutDraft.map((id) => ELF_LOADOUT_OPTIONS.find((option) => option.id === id)?.name).filter(Boolean).join(" / ");
+      const entries = [["阶段", "开局祝福"], ["祝福", names || "未选择"], ["行动", "确认后进入预备移动"], ["费用", "-"], ["状态", ready ? "可以确认" : `请选择 ${required} 个主动技`]];
+      tacticalUi.preview.textContent = "";
+      for (const [term, description] of entries) {
+        const wrap = document.createElement("div"); const dt = document.createElement("dt"); const dd = document.createElement("dd");
+        dt.textContent = term; dd.textContent = description; if (term === "状态") dd.className = ready ? "plan-ok" : "plan-error"; wrap.append(dt, dd); tacticalUi.preview.append(wrap);
+      }
+      tacticalUi.lock.textContent = "确认祝福"; tacticalUi.lock.disabled = !ready;
+      tacticalUi.cancel.textContent = "清空祝福"; tacticalUi.cancel.disabled = !elfLoadoutDraft.length;
       return;
     }
     if (mapEditor.active) {
@@ -2150,7 +3103,7 @@
       ["移动", state.tactical.path.length ? [activePlayer.position, ...state.tactical.path].map(coordName).join(" → ") : "原地不动"],
       ["终点", coordName(getPathEnd(activePlayer))],
       ["行动", moving ? isPreparationRound() ? "预备移动后进入第 1 回合" : "移动结算后选择" : action ? action.name : "尚未选择"],
-      ["费用", action ? `${getCost(activePlayer, action)} XP` : "-"],
+      ["费用", action ? getCardCostLabel(activePlayer, action) : "-"],
       ["目标", targetMode === "none" ? "无需目标" : state.tactical.selectedTargetId ? getFighterById(state.tactical.selectedTargetId)?.label || "未选择" : getSelectedTargets().length ? getSelectedTargets().map(coordName).join(" + ") : "未选择"],
       ["表攻", state.tactical.battleMageImprint ? `启用，当前 ${activePlayer.flags.flameChasers || 0}🔥` : "-"],
       ["状态", validation.ok ? "可以锁定" : validation.reason],
@@ -2189,7 +3142,7 @@
 
   function validateMovementPlan() {
     if (state.over) return { ok: false, reason: "对局已结束" };
-    if (isPharmacistLoadoutPhase()) return { ok: false, reason: "请先完成配药" };
+    if (isPharmacistLoadoutPhase() || isElfLoadoutPhase()) return { ok: false, reason: "请先完成开局选择" };
     if (isTacticalOnline() && !getTacticalOnline()?.initialized) return { ok: false, reason: "等待对手加入" };
     if (state.tactical.resolving) return { ok: false, reason: "正在等待同步结算" };
     const moveLimit = getCurrentMoveLimit();
@@ -2210,10 +3163,16 @@
     if (!canUseAction(activePlayer, action)) return { ok: false, reason: "此行动当前不可用" };
     const mode = getActionTargetingMode(action);
     if (mode === "tile-pair" && !isValidFirebombTargetPair(activePlayer.position, getSelectedTargets())) return { ok: false, reason: "请选择两个连续的相邻格" };
-    if (["adjacent-tile", "enemy-range", "enemy", "ally"].includes(mode) && !state.tactical.selectedTargetId) return { ok: false, reason: mode === "ally" ? "请选择一名己方目标" : "请选择一个敌方目标" };
+    if (mode === "neighbor-tile") {
+      const target = getSelectedTargets()[0];
+      if (!target) return { ok: false, reason: "请选择相邻格" };
+      if (!areTilesConnected(activePlayer.position, target)) return { ok: false, reason: "只能选择相邻格" };
+      if (hasThinWallBetween(activePlayer.position, target)) return { ok: false, reason: "该边已有薄墙" };
+    }
+    if (["adjacent-tile", "enemy-range", "enemy", "ally", "any-fighter-range"].includes(mode) && !state.tactical.selectedTargetId) return { ok: false, reason: mode === "ally" ? "请选择一名己方目标" : mode === "any-fighter-range" ? "请选择一名目标" : "请选择一个敌方目标" };
     const selectedFighter = getFighterById(state.tactical.selectedTargetId);
     if (selectedFighter && !canActionTargetFighter(action, selectedFighter, activePlayer)) return { ok: false, reason: "当前状态无法选择该目标" };
-    if (["adjacent-tile", "enemy-range"].includes(mode) && (!selectedFighter || !isWithinAttackRange(activePlayer.position, selectedFighter.position, action))) return { ok: false, reason: `敌方不在 ${getActionRange(action)} 格目标范围` };
+    if (["adjacent-tile", "enemy-range", "any-fighter-range"].includes(mode) && (!selectedFighter || !isWithinAttackRange(activePlayer.position, selectedFighter.position, action))) return { ok: false, reason: `目标不在 ${getActionRange(action)} 格范围` };
     if (mode !== "none" && !getSelectedTargets().length) return { ok: false, reason: "请选择目标格" };
     return { ok: true, reason: "可以锁定" };
   }
@@ -2229,6 +3188,11 @@
     if (state.tactical.phase === "action" && state.tactical.selection === "target") {
       const action = getSelectedAction();
       if (action?.tacticalEffect === "firebomb") toggleFirebombTarget(position);
+      else if (getActionTargetingMode(action) === "neighbor-tile" && getTargetableTiles().some((candidate) => sameTile(candidate, position))) {
+        state.tactical.selectedTarget = cloneTile(position);
+        state.tactical.selectedTargets = [cloneTile(position)];
+        state.tactical.selectedTargetId = null;
+      }
       else if (getTargetableTiles().some((candidate) => sameTile(candidate, position))) {
         state.tactical.selectedTarget = position;
         state.tactical.selectedTargets = [cloneTile(position)];
@@ -2276,7 +3240,7 @@
     const card = event.target.closest("[data-action-id]"); if (!card || card.disabled || state.tactical.phase !== "action") return;
     const actionId = card.dataset.actionId;
     if (state.tactical.selectedCardId === actionId) { state.tactical.selectedCardId = null; clearActionTargets(); state.tactical.selection = "action"; }
-    else { state.tactical.selectedCardId = actionId; clearActionTargets(); state.tactical.selection = getActionTargetingMode(getSelectedAction()) === "none" ? "action" : "target"; }
+    else { selectTacticalAction(actionId); return; }
     if (!isBattleMageImprintEligible(getSelectedAction())) state.tactical.battleMageImprint = false;
     renderTactical();
   }
@@ -2286,11 +3250,22 @@
       pharmacistLoadoutDraft = [];
       applyDraftPharmacistLoadoutToPlayer();
     }
+    if (isElfLoadoutPhase()) {
+      elfLoadoutDraft = [];
+      applyDraftElfLoadoutToPlayer();
+    }
     if (state.tactical.phase === "movement") state.tactical.path = [];
     if (state.tactical.phase === "action") { state.tactical.selectedCardId = null; state.tactical.battleMageImprint = false; clearActionTargets(); state.tactical.selection = "action"; }
     renderTactical();
   }
-  function setFilter(event) { const button = event.target.closest("[data-filter]"); if (!button) return; state.tactical.filter = button.dataset.filter; tacticalUi.cards.scrollLeft = 0; for (const item of tacticalUi.filters.querySelectorAll("button")) item.setAttribute("aria-pressed", String(item === button)); renderCards(); }
+  function setFilter(event) {
+    const button = event.target.closest("[data-filter]");
+    if (!button) return;
+    state.tactical.filter = normalizeActionFilter(button.dataset.filter);
+    tacticalUi.cards.scrollLeft = 0;
+    updateActionFilterButtons();
+    renderCards();
+  }
 
   function toggleBattleMageImprint() {
     if (!canUseBattleMageImprintToggle()) return;
@@ -2313,16 +3288,88 @@
   }
 
   function planEnemyMove(enemy) {
-    const player = chooseEnemyTeamTarget(enemy);
+    if (enemyCanScoreObjective(enemy)) return [];
     const occupied = getVisibleOccupiedTiles(enemy);
-    const playerAdjacent = player ? neighbors(player.position).filter((tile) => !occupied.some((entry) => sameTile(tile, entry))) : [];
+    const candidates = getEnemyMoveCandidates(enemy, occupied);
+    if (!candidates.length) return [];
+    candidates.sort((first, second) => second.score - first.score || first.path.length - second.path.length || coordName(first.destination).localeCompare(coordName(second.destination)));
+    return candidates[0].path;
+  }
+
+  function enemyCanScoreObjective(enemy) {
+    return Boolean(enemy)
+      && sameTile(enemy.position, TACTICAL_MAP.objective)
+      && state.tactical.objectiveHeld?.[enemy.id]
+      && enemy.xp >= OBJECTIVE_SCORE_COST;
+  }
+
+  function getEnemyMoveCandidates(enemy, occupied) {
+    const limit = getMoveLimitForFighter(enemy);
+    const seen = getReachableTiles(enemy.position, limit, occupied);
+    const candidates = [];
+    for (const entry of seen.values()) {
+      const destination = entry.tile;
+      const path = sameTile(destination, enemy.position) ? [] : bfsPath(enemy.position, [destination], occupied).slice(0, limit);
+      if (getMovementTollCost(enemy, path) > enemy.xp) continue;
+      candidates.push({ destination, path, score: scoreEnemyMoveDestination(enemy, destination, path, occupied) });
+    }
+    return candidates;
+  }
+
+  function scoreEnemyMoveDestination(enemy, destination, path, occupied) {
+    const target = chooseEnemyTeamTarget(enemy);
     const ally = getEnemyFighters().find((fighter) => fighter !== enemy && !isFighterDefeated(fighter));
-    const shouldPressureTarget = Boolean(player) && isTeamBattle() && (enemy.id === "ai-b" || player.hp <= 1 || (ally && ally.hp <= 1));
-    let route = shouldPressureTarget ? bfsPath(enemy.position, playerAdjacent, occupied) : bfsPath(enemy.position, [TACTICAL_MAP.objective], occupied);
-    if (!route.length && player) route = bfsPath(enemy.position, playerAdjacent, occupied);
-    if (!route.length) route = bfsPath(enemy.position, TACTICAL_MAP.energyTiles, occupied);
-    const path = route.slice(0, getCurrentMoveLimit());
-    return getMovementTollCost(enemy, path) > enemy.xp ? [] : path;
+    let score = 0;
+    const currentlyOnObjective = sameTile(enemy.position, TACTICAL_MAP.objective);
+    const destinationIsObjective = sameTile(destination, TACTICAL_MAP.objective);
+    const heldObjective = Boolean(state.tactical.objectiveHeld?.[enemy.id]);
+    const canPayObjective = enemy.xp >= OBJECTIVE_SCORE_COST;
+
+    if (destinationIsObjective) {
+      if (heldObjective && canPayObjective) score += 10000;
+      else if (heldObjective) score += 760;
+      else score += 430;
+      if (state.tactical.enemyScore + scoringRules.objectiveScore >= scoringRules.victoryScore) score += 260;
+    } else if (currentlyOnObjective && heldObjective) {
+      score -= canPayObjective ? 1200 : 520;
+    }
+
+    const objectiveDistance = getRouteDistance(destination, TACTICAL_MAP.objective, 8);
+    if (!destinationIsObjective && Number.isFinite(objectiveDistance)) score += Math.max(0, 110 - objectiveDistance * 18);
+
+    const playerScorer = getPlayerFighters().find((fighter) => (
+      !isFighterDefeated(fighter)
+      && sameTile(fighter.position, TACTICAL_MAP.objective)
+      && state.tactical.objectiveHeld?.[fighter.id]
+      && fighter.xp >= OBJECTIVE_SCORE_COST
+    ));
+    if (playerScorer) {
+      const distanceToScorer = getRouteDistance(destination, playerScorer.position, 4);
+      if (distanceToScorer === 1) score += 260;
+      else if (distanceToScorer === 2) score += 140;
+    }
+
+    if (containsTile(TACTICAL_MAP.energyTiles, destination)) {
+      score += enemy.xp < OBJECTIVE_SCORE_COST ? 105 : 55;
+    }
+
+    if (target) {
+      const distanceToTarget = getRouteDistance(destination, target.position, 8);
+      if (distanceToTarget === 1) score += 100;
+      else if (distanceToTarget === 2) score += 70;
+      else if (Number.isFinite(distanceToTarget)) score += Math.max(0, 55 - distanceToTarget * 8);
+      if (isTeamBattle() && (enemy.id === "ai-b" || target.hp <= 1 || (ally && ally.hp <= 1))) score += Math.max(0, 80 - distanceToTarget * 18);
+    }
+
+    const nearbyThreats = getAlivePlayers().filter((fighter) => canFighterSee(fighter, enemy) && getRouteDistance(destination, fighter.position, 2) <= 2);
+    for (const threat of nearbyThreats) {
+      if (enemy.hp <= 1 && threat.xp >= 1) score -= 90;
+      else if (threat.xp >= 5) score -= 45;
+    }
+
+    if (!path.length) score += 8;
+    score -= getMovementTollCost(enemy, path) * 35;
+    return score;
   }
 
   function chooseEnemyTeamTarget(enemy, action = null) {
@@ -2462,6 +3509,10 @@
   function buildResolvedAction(fighter, opponent, plan, finalPosition, opponentFinalPosition) {
     const base = getActionById(plan.actionId, fighter) || ACTION_BY_ID.ji;
     const action = { ...base };
+    if (isGuardThinWallShortAttack(fighter, action, finalPosition)) {
+      action.power = (action.power || 0) + (BALANCE.heroes.guard.thinWallAttackBonus || 0);
+      action.tacticalThinWallBoost = true;
+    }
     if (plan.battleMageImprint && fighter.heroId === "battleMage" && isBattleMageImprintEligible(base)) {
       action.battleMageImprint = true;
     }
@@ -2470,6 +3521,16 @@
       const targets = Array.isArray(plan.target) ? plan.target.map(cloneTile) : [];
       action.tacticalFirebomb = true;
       action.tacticalTargets = targets;
+      action.tacticalSkipLegacyAttack = true;
+      return action;
+    }
+    if (mode === "neighbor-tile") {
+      const target = Array.isArray(plan.target) ? plan.target[0] : plan.target;
+      if (target && areTilesConnected(finalPosition, target)) {
+        action.tacticalBuildWall = { first: cloneTile(finalPosition), second: cloneTile(target) };
+      } else {
+        action.tacticalMiss = true;
+      }
       action.tacticalSkipLegacyAttack = true;
       return action;
     }
@@ -2482,9 +3543,21 @@
       if (hit) action.tacticalTarget = opponent;
       else action.tacticalMiss = true;
     }
+    if (mode === "any-fighter-range") {
+      const hit = sameTile(plan.target, opponentFinalPosition) && isWithinAttackRange(finalPosition, plan.target, base);
+      if (hit) action.tacticalTarget = opponent;
+      else action.tacticalMiss = true;
+    }
     if (mode === "enemy") action.tacticalTarget = opponent;
     if (mode === "ally") action.tacticalTarget = opponent;
     return action;
+  }
+
+  function isGuardThinWallShortAttack(fighter, action, position = fighter?.position) {
+    return fighter?.heroId === "guard"
+      && action?.kind === "attack"
+      && getActionCategory(action) === "range-1"
+      && hasAnyThinWall(position);
   }
 
   function isTacticalOnline() {
@@ -2518,6 +3591,7 @@
   function makeOnlineFighter(player, fallbackLabel) {
     return makeFighter(player?.name || fallbackLabel, player?.heroId || "classic", {
       pharmacistLoadout: player?.pharmacistLoadout,
+      elfLoadout: player?.elfLoadout,
     });
   }
   function makeOnlineTeamFighter(player, index, fallbackLabel) {
@@ -2526,6 +3600,7 @@
     const name = index === 0 ? (player?.name || fallbackLabel) : `${player?.name || fallbackLabel} B`;
     return makeFighter(name, heroId, {
       pharmacistLoadout: player?.pharmacistLoadout,
+      elfLoadout: player?.elfLoadout,
     });
   }
 
@@ -2541,8 +3616,8 @@
     state.over = false;
     state.matchRecorded = false;
     state.pendingEndChoice = null;
-    state.player = makeFighter(playerName, tacticalUi.playerHero.value, { pharmacistLoadout: getConfiguredPharmacistLoadout() });
-    state.playerB = teamOnline ? makeFighter(`${playerName} B`, tacticalUi.playerBHero.value, { pharmacistLoadout: getConfiguredPharmacistLoadout() }) : null;
+    state.player = makeFighter(playerName, tacticalUi.playerHero.value, { pharmacistLoadout: getConfiguredPharmacistLoadout(), elfLoadout: getConfiguredElfLoadout() });
+    state.playerB = teamOnline ? makeFighter(`${playerName} B`, tacticalUi.playerBHero.value, { pharmacistLoadout: getConfiguredPharmacistLoadout(), elfLoadout: getConfiguredElfLoadout() }) : null;
     state.enemy = makeFighter("等待对手", "classic");
     state.enemyB = teamOnline ? makeFighter("等待对手 B", "priest") : null;
     if (teamOnline) {
@@ -2563,7 +3638,7 @@
     state.melee.fighters = getAllTacticalFighters();
     state.tactical = {
       phase: "movement", selection: "move", path: [], selectedCardId: null, selectedTarget: null, selectedTargetId: null, selectedTargets: [],
-      filter: state.tactical?.filter || "available", playerScore: 0, enemyScore: 0, objectiveHeld: {}, flames: [], winReason: "", resolving: false, standbyAutoPassScheduled: false, battleMageImprint: false, prepRound: false, pendingEndChoice: null, battleMode, online, activePlayerId: state.player.id, lockedPlans: { movement: {}, action: {} }, spawnPoints: {},
+      filter: normalizeActionFilter(state.tactical?.filter), playerScore: 0, enemyScore: 0, objectiveHeld: {}, flames: [], temporaryThinWalls: [], winReason: "", resolving: false, standbyAutoPassScheduled: false, battleMageImprint: false, prepRound: false, pendingEndChoice: null, battleMode, online, activePlayerId: state.player.id, lockedPlans: { movement: {}, action: {} }, spawnPoints: {},
     };
     state.tactical.spawnPoints = Object.fromEntries(getAllTacticalFighters().map((fighter) => [fighter.id, cloneTile(fighter.position)]));
     clearTacticalLog();
@@ -2652,6 +3727,7 @@
         heroIds: teamOnline ? [tacticalUi.playerHero.value, tacticalUi.playerBHero.value] : undefined,
         playerName,
         pharmacistLoadout: getConfiguredPharmacistLoadout(),
+        elfLoadout: getConfiguredElfLoadout(),
         mapConfig: cloneMapConfig(TACTICAL_MAP),
         spawns: getSpawnDraftFromControls(),
         scoringRules,
@@ -2681,6 +3757,7 @@
         heroIds: teamOnline ? [tacticalUi.playerHero.value, tacticalUi.playerBHero.value] : undefined,
         playerName,
         pharmacistLoadout: getConfiguredPharmacistLoadout(),
+        elfLoadout: getConfiguredElfLoadout(),
       });
       const online = { roomCode: data.code, playerId: data.playerId, slot: data.slot, initialized: false, pendingPlan: false, polling: false, appliedResults: new Set(), acknowledgedResults: new Set(), pollTimer: null, lastPhaseKey: "", teamMode: teamOnline };
       tacticalMenuOpen = false;
@@ -2698,7 +3775,7 @@
     if (!Array.isArray(rawPath)) return [];
     const path = [];
     let previous = fighter.position;
-    for (const rawTile of rawPath.slice(0, MOVE_POINTS)) {
+    for (const rawTile of rawPath.slice(0, getMoveLimitForFighter(fighter))) {
       if (!rawTile || !Number.isInteger(rawTile.row) || !Number.isInteger(rawTile.col)) break;
       const tile = { row: rawTile.row, col: rawTile.col };
       if (!isStandable(tile, getVisibleOccupiedTiles(fighter)) || !areTilesConnected(previous, tile)) break;
@@ -2866,7 +3943,7 @@
       state.tactical.lockedPlans = { movement: {}, action: {} };
       activatePlanningPlayer(getAlivePlayers()[0] || state.player, room.phase);
       online.pendingPlan = false;
-      for (const fighter of getAllTacticalFighters()) fighter.movePoints = room.phase === "movement" ? MOVE_POINTS : 0;
+      refreshMovePointsForPhase(room.phase);
       addTacticalLog(room.phase === "movement" ? `第 ${room.round} 回合开始。` : "移动结算完成，开始选择行动。", "move");
       renderTactical();
     }
@@ -2909,6 +3986,7 @@
     if (!raw?.id || !raw?.heroId) return null;
     const fighter = makeFighter(raw.label || "玩家", raw.heroId, {
       pharmacistLoadout: raw.flags?.pharmacistLoadout,
+      elfLoadout: raw.flags?.elfLoadout,
     });
     Object.assign(fighter, cloneOnlineSnapshotValue(raw));
     fighter.hero = HEROES[fighter.heroId] || fighter.hero;
@@ -3023,10 +4101,14 @@
           ...getOnlineTeamPlans(result.plans?.[online.slot], online.slot, "action"),
           ...getOnlineTeamPlans(result.plans?.[opponentSlot], opponentSlot, "action"),
         ]
-        : [
-          { fighter: state.player, ...getOnlineActionPlan(result.plans?.[online.slot]), targetId: state.enemy.id },
-          { fighter: state.enemy, ...getOnlineActionPlan(result.plans?.[opponentSlot]), targetId: state.player.id },
-        ];
+        : (() => {
+          const selfPlan = getOnlineActionPlan(result.plans?.[online.slot]);
+          const opponentPlan = getOnlineActionPlan(result.plans?.[opponentSlot]);
+          return [
+            { fighter: state.player, ...selfPlan, targetId: selfPlan.targetId || state.enemy.id },
+            { fighter: state.enemy, ...opponentPlan, targetId: opponentPlan.targetId || state.player.id },
+          ];
+        })();
       const resolvedActions = actionPlans.map((plan) => {
         const target = getFighterById(plan.targetId) || getOpposingFighters(plan.fighter)[0] || (getPlayerFighters().includes(plan.fighter) ? state.enemy : state.player);
         return { fighter: plan.fighter, action: buildResolvedAction(plan.fighter, target, plan, plan.fighter.position, target.position), plan };
@@ -3036,12 +4118,11 @@
       exposeAttackingNinjas(resolvedActions, visibilityLogs);
       const defeatSnapshot = captureDefeatSnapshot();
       const visualSnapshot = captureTacticalVisualSnapshot();
-      const report = onlineTeam
-        ? resolveTacticalSquadRound(
-          resolvedActions.filter((entry) => getPlayerFighters().includes(entry.fighter)),
-          resolvedActions.filter((entry) => getEnemyFighters().includes(entry.fighter)),
-        )
-        : resolveRound(resolvedActions[0].action, resolvedActions[1].action);
+      const report = resolveTacticalSquadRound(
+        resolvedActions.filter((entry) => getPlayerFighters().includes(entry.fighter)),
+        resolvedActions.filter((entry) => getEnemyFighters().includes(entry.fighter)),
+      );
+      applyTacticalVisualResults(resolvedActions, report);
       report.logs.unshift(...visibilityLogs);
       applyTacticalFirebombs(resolvedActions, report);
       applyTacticalFlames(resolvedActions, report);
@@ -3139,6 +4220,11 @@
       confirmInitialPharmacistLoadout();
       return;
     }
+    if (isElfLoadoutPhase()) {
+      const confirm = tacticalUi.cards.querySelector(".loadout-confirm");
+      confirm?.click();
+      return;
+    }
     if (isTacticalOnline()) {
       if (isOnlineTeamBattle()) {
         await lockOnlineTeamPlan();
@@ -3179,8 +4265,11 @@
         entry.fighter.movePoints = 0;
       }
       applyContestedMovementTolls(movement);
+      const sneakMoveLogs = [];
+      for (const entry of movement) consumeAssassinSneakMove(entry.fighter, sneakMoveLogs);
       if (movement.some((entry) => entry.conflict)) addTacticalLog("有单位争夺同一格或撞上未移动单位，已留在原位。", "move");
       addTacticalLog(movement.map((entry) => `${entry.fighter.label}→${coordName(entry.end)}`).join("；"), "move");
+      for (const text of sneakMoveLogs) addTacticalLog(text, "move");
       applyObjectiveEntryBonuses(movement);
       exposeNearbyNinjas();
       await animateTacticalMovement(movement);
@@ -3196,7 +4285,7 @@
         state.tactical.standbyAutoPassScheduled = false;
         state.tactical.lockedPlans = { movement: {}, action: {} };
         activatePlanningPlayer(getAlivePlayers()[0] || state.player, "movement");
-        for (const fighter of getAllTacticalFighters()) fighter.movePoints = MOVE_POINTS;
+        refreshMovePointsForPhase("movement");
         addTacticalLog("预备移动完成，第 1 回合开始。", "move");
         renderTactical();
         return;
@@ -3249,10 +4338,11 @@
     exposeAttackingNinjas(actionEntries, visibilityLogs);
     const defeatSnapshot = captureDefeatSnapshot();
     const visualSnapshot = captureTacticalVisualSnapshot();
-    const report = ["trio", "team"].includes(state.tactical.battleMode)
-      ? resolveTacticalSquadRound(resolvedPlayerActions, resolvedEnemyActions)
-      : resolveRound(resolvedPlayerActions[0].action, resolvedEnemyActions[0].action);
+    const report = resolveTacticalSquadRound(resolvedPlayerActions, resolvedEnemyActions);
+    applyTacticalVisualResults(actionEntries, report);
     report.logs.unshift(...visibilityLogs);
+    applyTacticalBuildWalls(actionEntries, report);
+    applyTacticalMageLightning(actionEntries, report);
     applyTacticalFirebombs(actionEntries, report);
     applyTacticalFlames(actionEntries, report);
     exposeNearbyNinjas(report.logs, false);
@@ -3293,6 +4383,12 @@
     return resolveMeleeRound(plans, { deferCompletion: true });
   }
 
+  function applyTacticalVisualResults(entries, report) {
+    for (const entry of entries || []) {
+      entry.iceCritTargetIds = report?.plans?.get(entry.fighter?.id)?.context?.iceCritTargetIds || [];
+    }
+  }
+
   function buildTacticalMeleeAction(fighter, action, targetId) {
     const mode = getActionTargetingMode(action);
     if (mode !== "none" && mode !== "tile-pair" && action.kind === "skill" && targetId) {
@@ -3310,10 +4406,108 @@
     return action;
   }
 
+  function applyTacticalBuildWalls(actionEntries, report) {
+    for (const { fighter, action } of actionEntries) {
+      if (!action.effects?.buildThinWall) continue;
+      const wall = action.tacticalBuildWall;
+      if (!wall || action.tacticalMiss) {
+        report.logs.push({ kind: "impact", text: `${fighter.label}尝试筑墙，但目标格不在相邻位置。` });
+        continue;
+      }
+      const key = edgeKey(wall.first, wall.second);
+      const alreadyExists = TACTICAL_MAP.thinWalls.includes(key)
+        || (state.tactical.temporaryThinWalls || []).some((entry) => entry.key === key && entry.expireRound > state.round);
+      if (alreadyExists) {
+        report.logs.push({ kind: "impact", text: `${fighter.label}筑墙失败：${coordName(wall.first)} 与 ${coordName(wall.second)} 之间已有薄墙。` });
+        continue;
+      }
+      state.tactical.temporaryThinWalls ||= [];
+      state.tactical.temporaryThinWalls.push({
+        key,
+        activeRound: state.round + 1,
+        expireRound: state.round + 1 + (BALANCE.heroes.guard.buildWallDuration || 2),
+      });
+      report.logs.push({ kind: "move", text: `${fighter.label}在 ${coordName(wall.first)} 与 ${coordName(wall.second)} 之间筑墙，下回合开始生效。` });
+    }
+  }
+
   function getCombatantCard(fighter) {
     if (getPlayerFighters().includes(fighter)) return tacticalUi.playerCard;
     if (fighter === state.enemyB) return tacticalUi.enemyBCard;
     return tacticalUi.enemyCard;
+  }
+
+  function applyTacticalMageLightning(actionEntries, report) {
+    const actionsByFighter = new Map(actionEntries.map((entry) => [entry.fighter.id, entry.action]));
+    let dealtDamage = false;
+    for (const { fighter: source, action, plan } of actionEntries) {
+      if (!action.effects?.mageLightning) continue;
+      const target = action.tacticalTarget || getFighterById(plan?.targetId || action.targetId);
+      if (!target || !isFighterTargetable(target)) {
+        report.logs.push({ kind: "impact", text: `${source.label}释放闪电，但目标已经不在可命中位置。` });
+        continue;
+      }
+      const targetAction = actionsByFighter.get(target.id) || ACTION_BY_ID.ji;
+      const defense = target === source ? getDefense(target, targetAction) : getIncomingDefense(target, targetAction, source);
+      const lightning = {
+        ...action,
+        kind: "attack",
+        name: "闪电",
+        power: BALANCE.heroes.mage.lightningPower,
+        damage: 1,
+        magicalAttack: true,
+        gunnerSpellKey: "mage-lightning",
+        gunnerSpellName: "闪电",
+      };
+      const attack = action.tacticalMiss ? 0 : getAttack(source, lightning, target);
+      if (attack > defense) {
+        const damageNotes = [];
+        const targetCard = getCombatantCard(target);
+        const absorbSeed = processGunnerIncomingAttack(target, source, lightning, damageNotes);
+        const damage = dealDamage(source, target, lightning, `${source.label}释放闪电击穿${target.label}防御 ${formatDefense(defense)}，${target.label} HP -1。`, report.logs, damageNotes, targetCard, absorbSeed || {});
+        dealtDamage ||= damage > 0;
+        for (const note of damageNotes) report.logs.push({ text: note });
+        continue;
+      }
+
+      report.logs.push({ kind: "impact", text: `${source.label}的闪电未击中${target.label}，向${target.label}身边敌方溅射 Ji刀。` });
+      const splashAction = {
+        id: "mage-lightning-splash",
+        kind: "attack",
+        name: "闪电溅射·Ji刀",
+        cost: 0,
+        power: BALANCE.heroes.mage.lightningSplashPower,
+        damage: 1,
+        range: BALANCE.heroes.mage.lightningSplashRange,
+        magicalAttack: true,
+        gunnerSpellKey: "mage-lightning",
+        gunnerSpellName: "闪电溅射",
+      };
+      const splashTargets = getAllTacticalFighters().filter((victim) => {
+        if (victim === target || !isFighterTargetable(victim)) return false;
+        if (getFighterTeam(victim) === getFighterTeam(target)) return false;
+        return getRouteDistance(target.position, victim.position, BALANCE.heroes.mage.lightningSplashRange) <= BALANCE.heroes.mage.lightningSplashRange;
+      });
+      if (!splashTargets.length) {
+        report.logs.push({ text: `${target.label}身边没有可溅射的敌方目标。` });
+        continue;
+      }
+      for (const victim of splashTargets) {
+        const victimAction = actionsByFighter.get(victim.id) || ACTION_BY_ID.ji;
+        const victimDefense = getIncomingDefense(victim, victimAction, target);
+        const damageNotes = [];
+        const targetCard = getCombatantCard(victim);
+        const absorbSeed = processGunnerIncomingAttack(victim, target, splashAction, damageNotes);
+        if (getAttack(target, splashAction, victim) > victimDefense) {
+          const damage = dealDamage(target, victim, splashAction, `${target.label}引发的闪电溅射击穿${victim.label}防御 ${formatDefense(victimDefense)}，${victim.label} HP -1。`, report.logs, damageNotes, targetCard, absorbSeed || {});
+          dealtDamage ||= damage > 0;
+        } else {
+          report.logs.push({ text: `${target.label}引发的闪电溅射强度 ${BALANCE.heroes.mage.lightningSplashPower} 未超过${victim.label}防御 ${formatDefense(victimDefense)}。` });
+        }
+        for (const note of damageNotes) report.logs.push({ text: note });
+      }
+    }
+    if (dealtDamage) report.logs = report.logs.filter((item) => item.text !== "双方都没有造成伤害。");
   }
 
   function applyTacticalFirebombs(actionEntries, report) {
@@ -3371,6 +4565,7 @@
         context.damage = damage;
         if (damage > 0) {
           fighter.hp -= damage;
+          queueTacticalUnitCue(fighter, "damage", damage);
           runHook(fighter, "afterTakeDamage", fighter, null, context);
           report.logs.push({ kind: "impact", text: `${fighter.label}踩在 ${coordName(flame.position)} 的火焰上，HP -${damage}。` });
           dealtDamage = true;
@@ -3410,6 +4605,12 @@
       state.tactical.objectiveHeld[fighter.id] = false;
       fighter.objectiveProgress = 0;
       state.tactical.lastScore = scoringRules.killScore > 0;
+      announceScoreEvent({
+        team: scoringTeam,
+        method: "击杀得分",
+        points: scoringRules.killScore,
+        detail: `击倒 ${fighter.label}`,
+      });
       report.logs.push({ kind: "score", text: `${fighter.label}被击倒，${scoringTeam === "player" ? "己方" : "敌方"}获得 ${scoringRules.killScore} 分；下回合将在出生点复活。` });
     }
   }
@@ -3421,7 +4622,7 @@
       const label = fighter.label;
       const heroId = fighter.heroId;
       const spawn = findAvailableRespawnTile(getFighterSpawn(fighter), fighter);
-      const fresh = makeFighter(label, heroId, { pharmacistLoadout: fighter.flags?.pharmacistLoadout });
+      const fresh = makeFighter(label, heroId, { pharmacistLoadout: fighter.flags?.pharmacistLoadout, elfLoadout: fighter.flags?.elfLoadout });
       Object.assign(fighter, fresh);
       fighter.id = id;
       fighter.xp = 1;
@@ -3533,6 +4734,12 @@
     state.tactical.objectiveHeld[trackerId] = false;
     fighter.objectiveProgress = 0;
     fighter.position = getObjectiveRespawn(fighter);
+    announceScoreEvent({
+      team,
+      method: "据点得分",
+      points: scoringRules.objectiveScore,
+      detail: `${sideLabel}守住中央据点`,
+    });
     addTacticalLog(`${sideLabel}守住据点并支付 ${OBJECTIVE_SCORE_COST} XP，获得 ${scoringRules.objectiveScore} 分，刷新至 ${coordName(fighter.position)}。`, "score");
   }
 
@@ -3546,13 +4753,7 @@
     if (!length) return 0;
     const online = state.tactical?.online;
     if (!online) return Math.floor(Math.random() * length);
-    const seed = `${online.roomCode}:${state.round}:${salt}`;
-    let hash = 2166136261;
-    for (let index = 0; index < seed.length; index += 1) {
-      hash ^= seed.charCodeAt(index);
-      hash = Math.imul(hash, 16777619);
-    }
-    return (hash >>> 0) % length;
+    return tacticalCore.seededIndex(length, `${online.roomCode}:${state.round}:${salt}`);
   }
 
   async function animateCombat() {
@@ -3591,10 +4792,11 @@
 
   function completeTacticalRound() {
     state.round += 1;
+    pruneTemporaryThinWalls();
     respawnTacticalFighters();
     state.tactical.phase = "movement"; state.tactical.selection = "move"; state.tactical.path = []; state.tactical.selectedCardId = null; state.tactical.battleMageImprint = false; clearActionTargets(); state.tactical.resolving = false; state.tactical.lastScore = false; state.tactical.standbyAutoPassScheduled = false; state.tactical.pendingEndChoice = null; state.tactical.endChoiceQueue = []; state.tactical.automaticEndChoices = []; state.tactical.lockedPlans = { movement: {}, action: {} };
     pruneMovementTolls();
-    for (const fighter of getAllTacticalFighters()) fighter.movePoints = MOVE_POINTS;
+    refreshMovePointsForPhase("movement");
     activatePlanningPlayer(getAlivePlayers()[0] || state.player, "movement");
     addTacticalLog(`第 ${state.round} 回合开始。`, "move"); renderTactical();
   }
@@ -3616,6 +4818,49 @@
     const modeLabel = state.tactical.battleMode === "online-team" ? "在线地图 2v2" : state.tactical.battleMode === "online" ? "在线地图 1v1" : state.tactical.battleMode === "team" ? "地图 2v2" : state.tactical.battleMode === "trio" ? "地图 1v2" : "地图 1v1";
     const record = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, playerName: state.player.label, finishedAt: new Date().toISOString(), rounds: state.round, mode, modeLabel, playerHero: getPlayerFighters().map((fighter) => getHeroDisplayName(fighter.hero)).join(" + "), opponentHeroes: getEnemyFighters().map((fighter) => `${fighter.label}：${getHeroDisplayName(fighter.hero)}`), result, winReason: "score" };
     writeMatchHistory([record, ...readMatchHistory()].slice(0, MAX_HISTORY_RECORDS)); state.matchRecorded = true;
+  }
+
+  function announceScoreEvent({ team, method, points, detail }) {
+    if (!points) return;
+    const stack = getScoreEventStack();
+    const banner = document.createElement("div");
+    banner.className = `score-event-banner ${team === "player" ? "score-player" : "score-enemy"}`;
+    banner.setAttribute("role", "status");
+    banner.setAttribute("aria-live", "polite");
+
+    const side = document.createElement("span");
+    side.className = "score-event-side";
+    side.textContent = team === "player" ? "己方" : "敌方";
+
+    const body = document.createElement("span");
+    body.className = "score-event-body";
+    const title = document.createElement("strong");
+    title.textContent = method;
+    const sub = document.createElement("em");
+    sub.textContent = detail;
+    body.append(title, sub);
+
+    const gain = document.createElement("span");
+    gain.className = "score-event-points";
+    gain.textContent = `+${points}`;
+
+    banner.append(side, body, gain);
+    stack.prepend(banner);
+    window.setTimeout(() => banner.classList.add("is-leaving"), 2100);
+    window.setTimeout(() => {
+      banner.remove();
+      if (!stack.children.length) stack.remove();
+    }, 2750);
+  }
+
+  function getScoreEventStack() {
+    let stack = document.querySelector(".score-event-stack");
+    if (!stack) {
+      stack = document.createElement("div");
+      stack.className = "score-event-stack";
+      tacticalUi.shell.append(stack);
+    }
+    return stack;
   }
 
   function addTacticalLog(text, kind = "") {
@@ -3827,6 +5072,8 @@
       const lore = document.createElement("p"); lore.className = "tactical-hero-lore"; lore.textContent = HERO_LORE[hero.id] || "此英雄的背景故事仍在雾中。"; body.append(lore);
       appendTacticalHeroSection(body, "被动", hero.passives || [], "无被动");
       appendTacticalHeroSection(body, "主动技能", hero.activeSkills || [], "无主动技能");
+      const liveEntries = getFighterStatusEntries(fighter).filter((entry) => !(hero.passives || []).includes(entry));
+      if (liveEntries.length) appendTacticalHeroSection(body, "当前状态", liveEntries, "");
     });
   }
 
@@ -3921,14 +5168,26 @@
         confirmInitialPharmacistLoadout();
         return;
       }
+      if (isElfLoadoutPhase()) {
+        event.preventDefault();
+        tacticalUi.cards.querySelector(".loadout-confirm")?.click();
+        return;
+      }
       if (!tacticalUi.lock.disabled) {
         event.preventDefault();
         lockPlan();
       }
       return;
     }
+    if (state.tactical.phase === "action" && !event.repeat) {
+      const quickActionId = { j: "ji", k: "def-small", l: "atk-1" }[event.key.toLowerCase()];
+      if (quickActionId && selectTacticalAction(quickActionId)) {
+        event.preventDefault();
+        return;
+      }
+    }
     if (event.code === "Space" || event.key === " ") {
-      if (isPharmacistLoadoutPhase()) return;
+      if (isPharmacistLoadoutPhase() || isElfLoadoutPhase()) return;
       if (state.tactical.phase === "action") {
         event.preventDefault();
         cycleAvailableAction();
@@ -3956,6 +5215,16 @@
 
   tacticalUi.map.addEventListener("pointerdown", handleMapEditorPointerDown, true);
   tacticalUi.map.addEventListener("click", handleMapClick);
+  tacticalUi.view3dToggle?.addEventListener("click", () => {
+    const next = !tacticalUi.view3dToggle.matches('[aria-pressed="true"]');
+    tacticalUi.view3dToggle.setAttribute("aria-pressed", String(next));
+    tacticalUi.view3dToggle.textContent = next ? "2D 战术" : "3D 战术";
+    tacticalUi.map.hidden = next;
+    tacticalUi.stage3d.hidden = !next;
+    tacticalUi.shell.classList.toggle("is-3d-view", next);
+    try { localStorage.setItem("ji-tactical-3d-view", String(next)); } catch (_) { /* local view preference is optional */ }
+    window.renderJiTactical3d?.(window.__JI_TACTICAL_3D_SNAPSHOT__);
+  });
   tacticalUi.playerOverview.addEventListener("click", handlePlayerOverviewClick);
   tacticalUi.enemyOverview.addEventListener("click", handleEnemyOverviewClick);
   tacticalUi.cards.addEventListener("click", handleCardClick);
@@ -4005,11 +5274,16 @@
     mapEditor.libraryId = entry?.id || "";
     renderMapEditor();
   });
+  tacticalUi.mapEditorName?.addEventListener("input", () => {
+    if (mapEditor.active && tacticalUi.mapName) tacticalUi.mapName.textContent = getCurrentMapName();
+  });
   tacticalUi.mapEditorLoad?.addEventListener("click", loadSelectedMapFromLibrary);
   tacticalUi.mapEditorDelete?.addEventListener("click", deleteSelectedMapFromLibrary);
   tacticalUi.mapEditorSave.addEventListener("click", saveMapEditorDraft);
   tacticalUi.mapEditorReset.addEventListener("click", resetMapEditorDraft);
   tacticalUi.mapEditorCancel.addEventListener("click", cancelMapEditor);
+  tacticalUi.tutorialNext?.addEventListener("click", advanceTutorial);
+  tacticalUi.tutorialSkip?.addEventListener("click", exitTutorial);
   tacticalUi.modalClose.addEventListener("click", hideModal);
   tacticalUi.modal.addEventListener("click", (event) => { if (event.target === tacticalUi.modal) hideModal(); });
   document.addEventListener("keydown", (event) => {
@@ -4038,8 +5312,13 @@
     canSee: (viewerId, targetId) => canFighterSee(getFighterById(viewerId), getFighterById(targetId)),
     getVisibleEnemies: () => getEnemyFighters().filter((fighter) => isFighterVisibleToTeam(fighter, "player")).map((fighter) => fighter.id),
   };
+  window.playTacticalUnitCue = playTacticalUnitCue;
 
   applyMapConfig(loadSavedMapConfig());
   initializeHeroSelects();
+  setupTutorialFromRequest();
   resetTacticalGame();
+  try {
+    if (localStorage.getItem("ji-tactical-3d-view") === "true") tacticalUi.view3dToggle?.click();
+  } catch (_) { /* local view preference is optional */ }
 })();

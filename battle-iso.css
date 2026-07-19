@@ -1,0 +1,313 @@
+/* Tactical board skin. Rules and interactions remain in tactical.js. */
+.tactical-map {
+  width: min(100%, 1250px);
+  margin-inline: auto;
+  padding: clamp(10px, 1.1vw, 18px);
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 46%, rgba(23, 103, 120, 0.38), transparent 45%),
+    repeating-linear-gradient(135deg, rgba(72, 201, 220, 0.09) 0 1px, transparent 1px 10px),
+    linear-gradient(135deg, #06171d, #0b303a 48%, #06151b);
+  border-color: #6f5730;
+  outline-color: #2e2113;
+}
+
+.iso-battle-board {
+  position: relative;
+  width: min(100%, 1200px);
+  aspect-ratio: 3 / 2;
+  margin: 0 auto;
+  isolation: isolate;
+}
+
+.iso-battle-board::before {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  inset: 2% 1.5%;
+  clip-path: polygon(8% 0, 92% 0, 100% 19%, 100% 81%, 92% 100%, 8% 100%, 0 81%, 0 19%);
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(42, 107, 115, 0.44), transparent 50%),
+    repeating-linear-gradient(135deg, rgba(94, 218, 224, 0.11) 0 1px, transparent 1px 9px),
+    #06212a;
+  box-shadow: inset 0 0 46px #000, 0 18px 28px rgba(0, 0, 0, 0.58);
+}
+
+.iso-battle-grid { position: absolute; inset: 0; overflow: hidden; }
+.iso-thin-wall-layer { position: absolute; z-index: 12; inset: 0; pointer-events: none; }
+.iso-unit-layer { position: absolute; z-index: 18; inset: 0; pointer-events: none; }
+.iso-column-labels, .iso-row-labels { position: absolute; inset: 0; pointer-events: none; z-index: 30; }
+.iso-grid-label {
+  position: absolute;
+  color: #eee2bd;
+  font: 800 clamp(10px, 1.25vw, 16px)/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-shadow: 0 2px 0 #05090a, 0 0 7px rgba(76, 216, 230, 0.38);
+}
+.iso-column-label { left: var(--label-x); top: 1.2%; transform: translateX(-50%); }
+.iso-row-label { left: 1.8%; top: var(--label-y); transform: translateY(-50%); }
+
+.iso-tile.map-tile {
+  position: absolute;
+  left: var(--iso-left);
+  top: var(--iso-top);
+  width: var(--iso-width);
+  height: var(--iso-height);
+  min-width: 0;
+  padding: 0;
+  overflow: visible;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  border: 0;
+  isolation: isolate;
+  background-color: #26353a;
+  background-image: var(--floor-texture, url("./assets/iso-arena/terrain/iso-floor-variant-a-v1.png"));
+  background-position: center;
+  background-size: 100% 100%;
+  box-shadow: none;
+  filter: drop-shadow(0 5px 0 rgba(2, 9, 11, 0.72));
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+/* A selected path still keeps the stone art visible underneath its blue halo. */
+.iso-tile.map-tile.path {
+  background-image: var(--floor-texture, url("./assets/iso-arena/terrain/iso-floor-variant-a-v1.png"));
+}
+
+.iso-tile.map-tile::before {
+  content: "";
+  position: absolute;
+  z-index: 20;
+  inset: 1.2%;
+  clip-path: inherit;
+  border: 1px solid rgba(150, 184, 183, 0.34);
+  box-shadow: inset 0 -7px 10px rgba(0, 0, 0, 0.38), inset 0 4px 7px rgba(164, 207, 201, 0.08);
+  pointer-events: none;
+}
+
+.iso-tile.map-tile[data-row="0"][data-col="0"],
+.iso-tile.map-tile[data-row="0"][data-col="3"],
+.iso-tile.map-tile[data-row="0"][data-col="6"],
+.iso-tile.map-tile[data-row="3"][data-col="1"],
+.iso-tile.map-tile[data-row="5"][data-col="4"],
+.iso-tile.map-tile[data-row="7"][data-col="7"] { --floor-texture: url("./assets/iso-arena/terrain/iso-floor-variant-b-v1.png"); }
+.iso-tile.map-tile[data-row="1"][data-col="2"],
+.iso-tile.map-tile[data-row="2"][data-col="5"],
+.iso-tile.map-tile[data-row="4"][data-col="3"],
+.iso-tile.map-tile[data-row="6"][data-col="0"],
+.iso-tile.map-tile[data-row="7"][data-col="4"] { --floor-texture: url("./assets/iso-arena/terrain/iso-floor-variant-c-v1.png"); }
+.iso-tile.map-tile[data-row="1"][data-col="6"],
+.iso-tile.map-tile[data-row="3"][data-col="6"],
+.iso-tile.map-tile[data-row="5"][data-col="0"],
+.iso-tile.map-tile[data-row="6"][data-col="6"] { --floor-texture: url("./assets/iso-arena/terrain/iso-floor-variant-d-v1.png"); }
+
+.iso-tile.map-tile.bush::after,
+.iso-tile.map-tile.wall::after { content: ""; position: absolute; z-index: 6; pointer-events: none; }
+.iso-tile.map-tile.bush::after {
+  inset: -6% -9% -2%;
+  background: url("./assets/iso-arena/terrain/iso-grass-flat-v2.png") center 58% / 118% 116% no-repeat;
+}
+.iso-tile.map-tile.wall { cursor: not-allowed; }
+.iso-tile.map-tile.wall::after { inset: -10% -12% -8%; background: url("./assets/iso-arena/terrain/iso-boulder-flat-v2.png") center / contain no-repeat; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.6)); }
+
+.iso-tile.map-tile.energy .map-target-marker,
+.iso-tile.map-tile.objective .map-target-marker { z-index: 8; }
+.iso-tile .map-target-marker.energy { width: 100%; height: 100%; left: 0; top: 0; transform: none; border: 0; border-radius: 0; background: url("./assets/iso-arena/terrain/iso-energy-flat-v2.png") center / contain no-repeat; box-shadow: none; clip-path: none; }
+.iso-tile .map-target-marker.objective { width: 100%; height: 100%; left: 0; top: 0; transform: none; border: 0; border-radius: 0; background: url("./assets/iso-arena/terrain/iso-altar-flat-v2.png") center / contain no-repeat; box-shadow: none; }
+.iso-tile .map-target-marker.energy,
+.iso-tile .map-target-marker.objective { animation: none !important; }
+.iso-tile.map-tile.energy::after,
+.iso-tile.map-tile.objective::after { display: none; }
+.iso-tile .map-target-marker.energy::after,
+.iso-tile .map-target-marker.objective::before,
+.iso-tile .map-target-marker.objective::after { display: none; }
+
+/* Units live above the clipped terrain tiles, so a character can stand on a
+   hex instead of being cropped into it. Portrait tokens remain the fallback. */
+.iso-unit-layer .unit-token {
+  position: absolute;
+  z-index: 14;
+  inset: auto;
+  left: var(--unit-left);
+  top: var(--unit-top);
+  width: clamp(40px, 6vw, 74px);
+  height: clamp(40px, 6vw, 74px);
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  border: 2px solid #dfe6d5;
+  border-radius: 0;
+  clip-path: polygon(50% 0, 94% 24%, 94% 76%, 50% 100%, 6% 76%, 6% 24%);
+  background: #101b1d;
+  box-shadow: 0 5px 0 rgba(0,0,0,.58), 0 0 0 4px rgba(4, 18, 22, .74);
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+}
+.iso-unit-layer .unit-token img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.1); object-position: center 22%; }
+.iso-unit-layer .unit-token.player, .iso-unit-layer .unit-token.player-b { border-color: #5edfff; box-shadow: 0 5px 0 rgba(0,0,0,.58), 0 0 10px rgba(64, 214, 255, .52); }
+.iso-unit-layer .unit-token.enemy, .iso-unit-layer .unit-token.enemy-b { border-color: #ff7962; box-shadow: 0 5px 0 rgba(0,0,0,.58), 0 0 10px rgba(255, 97, 74, .46); }
+
+.iso-unit-layer .unit-token.unit-standee {
+  /* The bottom edge is the character's foot point and sits on the tile centre. */
+  width: clamp(24px, 2.8vw, 35px);
+  height: clamp(44px, 5.25vw, 66px);
+  overflow: visible;
+  border: 0;
+  clip-path: none;
+  background: transparent;
+  box-shadow: none;
+  isolation: isolate;
+  transform: translate(-50%, -100%);
+}
+/* Sprite canvases have different built-in foot baselines. Only the artwork
+   moves; the unit container and team ring stay locked to the tile centre. */
+.iso-unit-layer .unit-token.unit-standee.hero-classic img { transform: translateY(-15px) scale(0.7);}
+/* The assassin sprite is wider than the classic warrior sprite; compensate so
+   their visible character heights match while keeping the foot anchor fixed. */
+.iso-unit-layer .unit-token.unit-standee.hero-assassin {
+  width: clamp(24px, 2.8vw, 35px);
+  height: clamp(44px, 5.25vw, 66px);
+}
+.iso-unit-layer .unit-token.unit-standee.hero-assassin img {
+  /* Assassin art has a broader canvas than the classic warrior. Scale the
+     artwork itself, not the anchored container, so both stand at equal height. */
+  transform: translateY(10px) scale(1.5);
+  transform-origin: center bottom;
+}
+.iso-unit-layer .unit-token.unit-standee.hero-vampire img {
+  transform: scale(1.6);
+  transform-origin: center bottom;
+}
+.iso-unit-layer .unit-token.unit-standee.hero-iceSorcerer img {
+  /* The generated ice mage frames have a square canvas. Scale the artwork
+     while preserving the shared foot anchor used by every battlefield unit. */
+  transform: translateY(7px) scale(1.7);
+  transform-origin: center bottom;
+}
+.iso-unit-layer .unit-token.unit-standee.hero-astrologer img {
+  transform: translateY(4px) scale(1.95);
+  transform-origin: center bottom;
+}
+
+.iso-unit-layer .unit-token.unit-standee.hero-astrologer.facing-left img,
+.iso-unit-layer .unit-token.unit-standee.hero-astrologer.facing-up-left img,
+.iso-unit-layer .unit-token.unit-standee.hero-astrologer.facing-down-left img {
+  transform: scaleX(-1) translateY(4px) scale(1.95);
+}
+.iso-unit-layer .unit-token.unit-standee::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  bottom: -3px;
+  width: 88%;
+  height: 14%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  border: 1px solid rgba(119, 222, 255, .9);
+  background: radial-gradient(ellipse, rgba(74, 206, 255, .38) 0 26%, rgba(33, 170, 235, .16) 43%, transparent 70%);
+  box-shadow: 0 0 6px rgba(76, 210, 255, .86), inset 0 0 4px rgba(200, 249, 255, .7);
+  filter: none;
+}
+.iso-unit-layer .unit-token.unit-standee::after { display: none; }
+.iso-unit-layer .unit-token.unit-standee img {
+  position: relative;
+  z-index: 1;
+  object-fit: contain;
+  object-position: center bottom;
+  transform: none;
+  filter: drop-shadow(0 4px 2px rgba(0, 0, 0, .74));
+}
+.iso-unit-layer .unit-token.unit-standee.facing-left img,
+.iso-unit-layer .unit-token.unit-standee.facing-up-left img,
+.iso-unit-layer .unit-token.unit-standee.facing-down-left img { transform: scaleX(-1); }
+.iso-unit-layer .unit-token.unit-standee.hero-assassin.facing-left img,
+.iso-unit-layer .unit-token.unit-standee.hero-assassin.facing-up-left img,
+.iso-unit-layer .unit-token.unit-standee.hero-assassin.facing-down-left img { transform: scaleX(-1) translateY(10px) scale(1.5); }
+.iso-unit-layer .unit-token.unit-standee.hero-classic.facing-left img,
+.iso-unit-layer .unit-token.unit-standee.hero-classic.facing-up-left img,
+.iso-unit-layer .unit-token.unit-standee.hero-classic.facing-down-left img { transform: scaleX(-1) translateY(-15px) scale(.7); }
+.iso-unit-layer .unit-token.unit-standee.hero-vampire.facing-left img,
+.iso-unit-layer .unit-token.unit-standee.hero-vampire.facing-up-left img,
+.iso-unit-layer .unit-token.unit-standee.hero-vampire.facing-down-left img { transform: scaleX(-1) scale(1.6); }
+.iso-unit-layer .unit-token.unit-standee.hero-iceSorcerer.facing-left img,
+.iso-unit-layer .unit-token.unit-standee.hero-iceSorcerer.facing-up-left img,
+.iso-unit-layer .unit-token.unit-standee.hero-iceSorcerer.facing-down-left img { transform: scaleX(-1) translateY(7px) scale(1.7); }
+.iso-unit-layer .unit-token.unit-standee.player img,
+.iso-unit-layer .unit-token.unit-standee.player-b img { filter: drop-shadow(0 0 4px rgba(80, 220, 255, .42)) drop-shadow(0 4px 2px rgba(0, 0, 0, .74)); }
+.iso-unit-layer .unit-token.unit-standee.enemy img,
+.iso-unit-layer .unit-token.unit-standee.enemy-b img { filter: drop-shadow(0 0 4px rgba(255, 102, 80, .4)) drop-shadow(0 4px 2px rgba(0, 0, 0, .74)); }
+.iso-unit-layer .unit-token.unit-standee.enemy::before,
+.iso-unit-layer .unit-token.unit-standee.enemy-b::before {
+  border-color: rgba(255, 121, 98, .94);
+  background: radial-gradient(ellipse, rgba(255, 105, 77, .38) 0 26%, rgba(238, 67, 48, .16) 43%, transparent 70%);
+  box-shadow: 0 0 6px rgba(255, 95, 73, .86), inset 0 0 4px rgba(255, 211, 198, .65);
+}
+
+/* The shared combat classes use transforms; standees need their ground anchor
+   preserved while they lunge, guard, or absorb a hit. */
+.iso-unit-layer .unit-token.unit-standee.fx-arriving { opacity: 0; transform: translate(-50%, -100%) scale(.72); }
+.iso-unit-layer .unit-token.unit-standee.fx-attacking { animation: isoStandeeLunge 340ms steps(4, end) both; }
+.iso-unit-layer .unit-token.unit-standee.fx-hit { animation: isoStandeeHit 540ms steps(5, end) both; }
+.iso-unit-layer .unit-token.unit-standee.fx-guard { animation: isoStandeeGuard 400ms steps(3, end) both; }
+.iso-unit-layer .unit-token.unit-standee.fx-support { animation: isoStandeeSupport 400ms steps(3, end) both; }
+@keyframes isoStandeeLunge { 45% { transform: translate(-50%, -107%) scale(1.1); filter: brightness(1.3); } 100% { transform: translate(-50%, -100%) scale(1); } }
+@keyframes isoStandeeHit { 0% { transform: translate(-50%, -100%); } 15% { transform: translate(calc(-50% - 7px), -100%) scale(1.06); filter: brightness(2) saturate(1.8) drop-shadow(0 0 10px #ff3a2f); } 34% { transform: translate(calc(-50% + 6px), -100%) scale(.94); } 56% { transform: translate(calc(-50% - 3px), -100%) scale(1.03); } 100% { transform: translate(-50%, -100%); filter: none; } }
+@keyframes isoStandeeGuard { 45% { transform: translate(-50%, -102%) scale(1.06); filter: brightness(1.44) sepia(.38) saturate(1.3) drop-shadow(0 0 9px #ffd75e); } 100% { transform: translate(-50%, -100%); filter: none; } }
+@keyframes isoStandeeSupport { 45% { transform: translate(-50%, -105%) scale(1.06); filter: brightness(1.4) saturate(1.18); } 100% { transform: translate(-50%, -100%); filter: none; } }
+
+.iso-tile.reachable::before, .iso-tile.path::before, .iso-tile.targetable::before, .iso-tile.target-selected::before { border-width: 3px; animation: none; }
+.iso-tile.reachable::before { border-color: #5ee5ff; background: rgba(58, 200, 247, .22); box-shadow: inset 0 0 16px rgba(39, 191, 246, .4), 0 0 12px rgba(60, 201, 244, .55); }
+.iso-tile.reachable.reachable-toll::before { border-color: #f4cf63; background: rgba(229, 178, 57, .19); }
+.iso-tile.reachable.reachable-toll-2::before { border-color: #ed923f; background: rgba(226, 121, 45, .21); }
+.iso-tile.reachable.reachable-toll-3::before { border-color: #df604e; background: rgba(213, 72, 46, .23); }
+.iso-tile.path::before { border-color: #dcfdff; background: rgba(91, 219, 255, .34); box-shadow: inset 0 0 18px rgba(114, 229, 255, .48), 0 0 14px rgba(114, 229, 255, .72); }
+.iso-tile.targetable::before { border-color: #f06d59; background: rgba(225, 70, 52, .28); box-shadow: inset 0 0 18px rgba(225, 70, 52, .38), 0 0 13px rgba(225, 70, 52, .6); }
+.iso-tile.target-selected::before { border-color: #ffcf62; background: rgba(255, 190, 63, .24); box-shadow: inset 0 0 18px rgba(255, 191, 68, .38), 0 0 15px rgba(255, 190, 63, .72); }
+.iso-tile.path::after { z-index: 25; right: 23%; bottom: 19%; width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid #dfffff; border-radius: 50%; color: #dfffff; background: #135b76; box-shadow: 0 0 7px #45d6fb; font-size: 10px; }
+
+/* Thin walls are rendered once in the shared board overlay. Their CSS anchor
+   is the midpoint of the real shared hex edge, not either tile's content box. */
+.iso-thin-wall {
+  position: absolute;
+  left: var(--wall-x);
+  top: var(--wall-y);
+  transform: translate(-50%, -50%);
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .78));
+}
+.iso-thin-wall.wall-vertical {
+  /* The old vertical sprite was a tall pillar, not a low shared-edge wall.
+     This short stone barricade has the same projected length as that edge. */
+  width: 4.7%;
+  height: 1.32%;
+  transform: translate(-50%, -50%) rotate(90deg);
+  border: 1px solid #142b35;
+  border-radius: 1px;
+  background:
+    repeating-linear-gradient(90deg, rgba(12, 29, 37, .86) 0 1px, transparent 1px 14px, rgba(15, 31, 38, .74) 14px 16px),
+    linear-gradient(180deg, #70818a 0 14%, #4d6069 16% 48%, #334852 50% 78%, #1e343e 80% 100%);
+  box-shadow: 0 1px 0 #89a0a2, 0 2px 0 #172a33, 0 4px 5px rgba(0, 0, 0, .58), inset 0 1px rgba(186, 205, 199, .18), inset 0 -1px rgba(3, 12, 17, .58);
+}
+.iso-thin-wall.wall-slash {
+  width: 6.9%;
+  height: 10.4%;
+  background-image: url("./assets/iso-arena/terrain/iso-thin-wall-slash-v2.png");
+}
+.iso-thin-wall.wall-backslash {
+  width: 8.3%;
+  height: 12.5%;
+  background-image: url("./assets/iso-arena/terrain/iso-thin-wall-backslash-v2.png");
+}
+.iso-tile .flame-token { z-index: 18; background: url("./assets/iso-arena/terrain/iso-flame-v1.png") center / contain no-repeat; box-shadow: none; clip-path: none; }
+.iso-tile .flame-token::after { display: none; }
+
+.iso-tile.editor-tile::before { border: 2px solid rgba(241, 192, 89, .58); box-shadow: inset 0 0 16px rgba(231, 177, 56, .28); }
+.iso-tile.editor-anchor::before { border: 4px solid #e53bdc; box-shadow: inset 0 0 20px rgba(229, 59, 220, .76); }
+.iso-tile .spawn-point-marker, .iso-tile .spawn-point-stack { z-index: 26; }
+
+@media (max-width: 900px) {
+  .tactical-map { padding: 8px; }
+  .iso-grid-label { font-size: 9px; }
+}

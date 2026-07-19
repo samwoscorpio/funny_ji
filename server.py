@@ -188,6 +188,7 @@ class Handler(BaseHTTPRequestHandler):
             mode = data.get("mode", "legacy")
             player_name = str(data.get("playerName") or "玩家")[:16]
             loadout = sanitize_loadout(data.get("pharmacistLoadout"))
+            elf_loadout = sanitize_loadout(data.get("elfLoadout"))
             if not hero_id:
                 error(self, 400, "缺少英雄。")
                 return
@@ -204,7 +205,7 @@ class Handler(BaseHTTPRequestHandler):
                     "mode": mode,
                     "phase": "movement" if mode in ("tactical", "tactical-team") else "action",
                     "players": {
-                        "p1": {"playerId": player_id, "heroId": hero_id, "heroIds": hero_ids, "name": player_name, "pharmacistLoadout": loadout},
+                        "p1": {"playerId": player_id, "heroId": hero_id, "heroIds": hero_ids, "name": player_name, "pharmacistLoadout": loadout, "elfLoadout": elf_loadout},
                         "p2": None,
                     },
                     "mapConfig": sanitize_room_blob(data.get("mapConfig")),
@@ -224,6 +225,7 @@ class Handler(BaseHTTPRequestHandler):
             hero_id = data.get("heroId")
             player_name = str(data.get("playerName") or "玩家")[:16]
             loadout = sanitize_loadout(data.get("pharmacistLoadout"))
+            elf_loadout = sanitize_loadout(data.get("elfLoadout"))
             if not hero_id:
                 error(self, 400, "缺少英雄。")
                 return
@@ -237,7 +239,7 @@ class Handler(BaseHTTPRequestHandler):
                     error(self, 409, "房间已满。")
                     return
                 player_id = secrets.token_urlsafe(12)
-                room["players"]["p2"] = {"playerId": player_id, "heroId": hero_id, "heroIds": hero_ids, "name": player_name, "pharmacistLoadout": loadout}
+                room["players"]["p2"] = {"playerId": player_id, "heroId": hero_id, "heroIds": hero_ids, "name": player_name, "pharmacistLoadout": loadout, "elfLoadout": elf_loadout}
             json_response(self, 200, {"code": code, "playerId": player_id, "slot": "p2"})
         except Exception as exc:
             error(self, 400, str(exc))

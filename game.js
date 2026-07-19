@@ -63,8 +63,12 @@ const BALANCE = {
       jiXpGain: 2,
     },
     guard: {
-      maxHp: 4,
+      maxHp: 3,
       defenseBonus: 1,
+      thinWallAttackBonus: 0.1,
+      buildWallCost: 1,
+      buildWallDefense: 2,
+      buildWallDuration: 2,
     },
     breaker: {
       maxHp: 4,
@@ -73,14 +77,14 @@ const BALANCE = {
     },
     priest: {
       maxHp: 3,
-      allowedAttackCosts: [1, 5, 10],
+      allowedAttackIds: ["atk-1", "atk-5", "atk-10", "atk-long", "atk-spear"],
       shieldCost: 1,
       healCost: 4,
       healAmount: 1,
     },
     pharmacist: {
       maxHp: 3,
-      allowedAttackCosts: [1, 5, 10],
+      allowedAttackIds: ["atk-1", "atk-5", "atk-10", "atk-long", "atk-spear"],
       loadoutSize: 2,
       recoveryCountdown: 10,
       recoveryHealTo: 2,
@@ -93,6 +97,19 @@ const BALANCE = {
       poisonTickDamage: 1,
       reviveCost: 8,
       reviveXp: 1,
+    },
+    elf: {
+      maxHp: 3,
+      allowedAttackIds: ["atk-1", "atk-5", "atk-10", "atk-long", "atk-spear"],
+      loadoutSize: 2,
+      elvenAuraCost: 3,
+      elvenAuraTurns: 2,
+      holyAuraCost: 2,
+      holyAuraTurns: 4,
+      energyTransferCost: 3,
+      energyTransferAmount: 3,
+      bindCost: 2,
+      bindTurns: 2,
     },
     ninja: {
       maxHp: 2,
@@ -137,6 +154,8 @@ const BALANCE = {
     assassin: {
       maxHp: 1,
       jiXpGain: 4,
+      sneakCost: 1,
+      sneakMoveBonus: 1,
     },
     vampire: {
       maxHp: 2,
@@ -201,6 +220,18 @@ const BALANCE = {
       grandSpinMaxPower: 6,
       forceJiTurns: 1,
     },
+    mage: {
+      maxHp: 1,
+      jiXpGain: 2,
+      lightningShardCost: 3,
+      lightningPower: 3,
+      lightningRange: 1,
+      lightningSplashRange: 2,
+      lightningSplashPower: 0.1,
+      thunderStrikeShardCost: 8,
+      thunderStrikePower: 5,
+      thunderStrikeRange: 2,
+    },
   },
   ai: {
     lowEnergyTarget: 2,
@@ -213,6 +244,10 @@ const BALANCE = {
       assassin: {
         lowEnergyTarget: 1,
         highThreatAttack: 7,
+      },
+      mage: {
+        lowEnergyTarget: 2,
+        highThreatAttack: 5,
       },
       vampire: {
         lowEnergyTarget: 1,
@@ -262,29 +297,14 @@ const PHARMACIST_LOADOUT_OPTIONS = [
   },
 ];
 const DEFAULT_PHARMACIST_LOADOUT = ["pharmacist-recovery", "pharmacist-invincible-potion"];
-const HERO_LORE = {
-  classic: "旧港的钟声停在午夜以后，仍有人听见武者在雾里练刀。每一次出手，都像在回应海底某个沉睡意志的拍掌声。",
-  priest: "牧师守着一座没有门的礼拜堂。祷文写在盐渍的墙上，所有被治愈的人都梦见过同一只从云层后睁开的眼。",
-  assassin: "刺客从不留下脚印，只留下潮湿的黑羽与忽然熄灭的灯。有人说他的 Ji 不是蓄力，而是在向暗处归还名字。",
-  vampire: "吸血鬼的城堡不在山上，而在镜子的背面。每一道伤口都是邀请，每一次回复都让月光更像血。",
-  vaingloriousWarrior: "虚荣勇士听见深海观众的喝彩才会拔剑。他的荣耀越响，盔甲内侧那些细小的触须就越安静。",
-  werewolf: "狼人记不清第一次变身的夜晚，只记得月亮裂成两半。狂暴时，他不是失去理智，而是终于听懂了远古的吼声。",
-  iceSorcerer: "冰法收集的不是冰，而是星星死亡后的碎屑。碎片满溢时，敌人会短暂看见宇宙尽头冻结的王座。",
-  astrologer: "占星家不预测未来，他只把未来从天上拽下来。那些坠落的鬼刀，来自一颗不该被命名的黑星。",
-  dancer: "舞女的步伐写成螺旋，观者越想逃离，越会跟着节拍走向中央。她微笑时，地板下会响起第二支乐队。",
-  hunter: "猎人追踪的猎物早已死去多年，但足迹每天都会更新。他的箭矢命中后会回到手中，像深林里不肯结束的回声。",
-  ninja: "忍者把影子折成细小的星刃。被他盯上的人会先失去方向，再听见黑暗里传来金属回旋的低响。",
-  puppet: "木偶的线并不通向天花板，而是垂入舞台下方的深井。它倒下时，井底会有另一双手慢慢把线重新系紧。",
-  pharmacist: "药师的药柜里没有标签，只有潮湿的星图。瓶中液体偶尔会自己转向，仿佛深渊里的病人正隔着玻璃呼吸。",
-  paladin: "圣骑士的盾牌来自一艘沉没圣船的舱门。每当敌意落在他身上，门后便传来潮湿的圣歌，催促所有刀锋转向同一个名字。",
-  battleMage: "战法把火焰写成会回头的符号。每一次命中，烈焰炫纹都会从敌人的伤口里折返，像一枚枚重新归队的赤色星环。",
-  gunner: "枪炮师拆开过太多敌人的法术残响。那些偷来的弹道被锁进炮台，等下一次雷声响起时，连施法者也认不出自己的火力。",
-  battery: "聚气师把每一次呼吸都存进铜制罗盘。罗盘指针从不指北，只指向下一次即将被夺走的机会。",
-  balancedBot: "平衡bot来自一间无人承认存在的实验室。它的算法追求公平，直到公平本身开始长出眼睛。",
-  woodendummy: "wood原本只是练功桩，直到某夜潮水漫进武馆。现在每一道木纹都像闭合的嘴，等待有人再拍一下 Ji。",
-  guard: "铁壁站在旧城门前太久，城门已经腐烂，他却仍在防守。盾牌背面刻着一行小字：不要听门后的海声。",
-  breaker: "破阵手相信所有阵法都有裂缝。后来他发现天空也是阵法，而星辰之间的裂缝正缓慢扩大。",
-};
+const ELF_LOADOUT_OPTIONS = [
+  { id: "elf-elven-aura", name: "精灵光环", kind: "skill", cost: BALANCE.heroes.elf.elvenAuraCost, text: `花费 ${BALANCE.heroes.elf.elvenAuraCost}，目标接下来 ${BALANCE.heroes.elf.elvenAuraTurns} 回合防御升一大级并获得吸血；本回合中防` },
+  { id: "elf-holy-aura", name: "神圣光环", kind: "skill", cost: BALANCE.heroes.elf.holyAuraCost, text: `花费 ${BALANCE.heroes.elf.holyAuraCost}，目标本回合防御升一大级；接下来 ${BALANCE.heroes.elf.holyAuraTurns} 回合 Ji 效率 +1，受伤即消失；本回合小防` },
+  { id: "elf-energy-transfer", name: "能量输送", kind: "skill", cost: BALANCE.heroes.elf.energyTransferCost, text: `花费 ${BALANCE.heroes.elf.energyTransferCost}，目标在下回合开始前获得 ${BALANCE.heroes.elf.energyTransferAmount} XP；本回合小防` },
+  { id: "elf-bind", name: "缴械", kind: "skill", cost: BALANCE.heroes.elf.bindCost, text: `花费 ${BALANCE.heroes.elf.bindCost}，目标下 ${BALANCE.heroes.elf.bindTurns} 回合不能使用攻击；中防可抵挡；本回合中防` },
+];
+const DEFAULT_ELF_LOADOUT = ["elf-elven-aura", "elf-holy-aura"];
+const HERO_LORE = window.JiHeroRegistry?.lore || {};
 
 function buildActions(balance) {
   const chargeActions = Object.entries(balance.actions.charge).map(([id, action]) => ({
@@ -357,6 +377,24 @@ const GUNNER_SPELL_SPECS = {
     range: 1,
     damage: BALANCE.heroes.pharmacist.poisonDamage,
   },
+  "mage-lightning": {
+    key: "mage-lightning",
+    owner: "法师",
+    name: "闪电炮台",
+    actionName: "闪电",
+    power: BALANCE.heroes.mage.lightningPower,
+    range: BALANCE.heroes.mage.lightningRange,
+    damage: 1,
+  },
+  "mage-thunder-strike": {
+    key: "mage-thunder-strike",
+    owner: "法师",
+    name: "雷击炮台",
+    actionName: "雷击",
+    power: BALANCE.heroes.mage.thunderStrikePower,
+    range: BALANCE.heroes.mage.thunderStrikeRange,
+    damage: 1,
+  },
   "gunner-cannon": {
     key: "gunner-cannon",
     owner: "枪炮师",
@@ -381,6 +419,7 @@ const GUNNER_HERO_SPELL_KEYS = {
   iceSorcerer: ["ice-dagger"],
   astrologer: ["astrologer-predict"],
   pharmacist: ["pharmacist-poison"],
+  mage: ["mage-lightning", "mage-thunder-strike"],
   gunner: ["gunner-cannon", "gunner-machine-gun"],
 };
 
@@ -392,7 +431,7 @@ const HEROES = {
     maxHp: BALANCE.heroes.priest.maxHp,
     startingXp: BALANCE.startingXp,
     description: "辅助型英雄，专职治疗师",
-    passives: [{ name: "辅助", text: "只能使用 1/5/10 费攻击" }],
+    passives: [{ name: "辅助", text: "可使用小刀、长刀、鬼刀、长矛、10费攻" }],
     activeSkills: [
       {
         id: "priest-shield",
@@ -427,7 +466,49 @@ const HEROES = {
     hooks: {
       canUseAction(action) {
         if (action.kind !== "attack") return true;
-        return BALANCE.heroes.priest.allowedAttackCosts.includes(action.cost);
+        return BALANCE.heroes.priest.allowedAttackIds.includes(action.id);
+      },
+    },
+  },
+  elf: {
+    id: "elf",
+    name: "精灵 Elf",
+    maxHp: BALANCE.heroes.elf.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: "辅助型光环使者，开局从四种祝福中选择两项。",
+    passives: [
+      { name: "辅助", text: "可使用小刀、长刀、鬼刀、长矛、10费攻" },
+      { name: "祝福选择", text: "开局前在四个主动技能中选择 2 个" },
+    ],
+    activeSkills: [
+      {
+        id: "elf-elven-aura", kind: "skill", category: "skill", name: "精灵光环", cost: BALANCE.heroes.elf.elvenAuraCost,
+        defense: BALANCE.defenseGrades.mid, range: 0, xpGain: 0,
+        text: ELF_LOADOUT_OPTIONS.find((option) => option.id === "elf-elven-aura").text,
+        effects: { elfElvenAura: true },
+      },
+      {
+        id: "elf-holy-aura", kind: "skill", category: "skill", name: "神圣光环", cost: BALANCE.heroes.elf.holyAuraCost,
+        defense: BALANCE.defenseGrades.small, range: 0, xpGain: 0,
+        text: ELF_LOADOUT_OPTIONS.find((option) => option.id === "elf-holy-aura").text,
+        effects: { upgradeDefense: true, elfHolyAura: true },
+      },
+      {
+        id: "elf-energy-transfer", kind: "skill", category: "skill", name: "能量输送", cost: BALANCE.heroes.elf.energyTransferCost,
+        defense: BALANCE.defenseGrades.small, range: 0, xpGain: 0,
+        text: ELF_LOADOUT_OPTIONS.find((option) => option.id === "elf-energy-transfer").text,
+        effects: { elfEnergyTransfer: true },
+      },
+      {
+        id: "elf-bind", kind: "skill", category: "skill", name: "缴械", cost: BALANCE.heroes.elf.bindCost,
+        defense: BALANCE.defenseGrades.mid, range: 0, xpGain: 0,
+        text: ELF_LOADOUT_OPTIONS.find((option) => option.id === "elf-bind").text,
+        effects: { elfBind: true },
+      },
+    ],
+    hooks: {
+      canUseAction(action) {
+        return action.kind !== "attack" || BALANCE.heroes.elf.allowedAttackIds.includes(action.id);
       },
     },
   },
@@ -438,7 +519,7 @@ const HEROES = {
     startingXp: BALANCE.startingXp,
     description: "辅助型药剂师，开局前从四种药剂方案中选择两个。",
     passives: [
-      { name: "辅助", text: "只能使用 1/5/10 费攻击" },
+      { name: "辅助", text: "可使用小刀、长刀、鬼刀、长矛、10费攻" },
       { name: "配药", text: "开局前在恢复、无敌药剂、下毒、复活药剂中选择 2 个" },
     ],
     activeSkills: [
@@ -490,7 +571,7 @@ const HEROES = {
     ],
     hooks: {
       canUseAction(action) {
-        if (action.kind === "attack") return BALANCE.heroes.pharmacist.allowedAttackCosts.includes(action.cost);
+        if (action.kind === "attack") return BALANCE.heroes.pharmacist.allowedAttackIds.includes(action.id);
         return true;
       },
       afterTakeDamage(self, attacker, context) {
@@ -756,10 +837,36 @@ const HEROES = {
     startingXp: BALANCE.startingXp,
     description: `高爆发脆皮英雄，最具代表性的英雄之一`,
     passives: [{ name: "疾蓄", text: `Ji 获得 ${BALANCE.heroes.assassin.jiXpGain} XP` }],
-    activeSkills: [],
+    activeSkills: [
+      {
+        id: "assassin-sneak",
+        kind: "skill",
+        name: "潜行",
+        cost: BALANCE.heroes.assassin.sneakCost,
+        power: 0,
+        defense: BALANCE.defenseGrades.medium,
+        xpGain: 0,
+        text: `花费 ${BALANCE.heroes.assassin.sneakCost}，本回合带中防；下回合移动阶段可额外移动 1 格`,
+        effects: {
+          assassinSneak: true,
+        },
+      },
+    ],
     hooks: {
       modifyXpGain(value, self, action) {
         return action.id === "ji" ? BALANCE.heroes.assassin.jiXpGain : value;
+      },
+      afterRound(self, opponent, context) {
+        if (!context.selfAction.effects?.assassinSneak) return;
+        setStatus(self, {
+          id: "assassin-sneak",
+          type: "positive",
+          name: "潜行",
+          text: "下回合移动 +1",
+          turns: 1,
+          fresh: true,
+        });
+        context.notes.push(`${self.label}进入潜行，下回合开始前可以额外移动一次。`);
       },
     },
   },
@@ -776,6 +883,7 @@ const HEROES = {
         const beforeHp = self.hp;
         self.hp = Math.min(self.maxHp, self.hp + BALANCE.heroes.vampire.healPerDamage * context.damage);
         const healed = self.hp - beforeHp;
+        if (healed > 0) queueTacticalUnitCue(self, "heal", healed);
         context.notes.push(`${self.label}触发吸血，回复 ${healed} HP，当前 ${formatHearts(self.hp)}。`);
       },
     },
@@ -1096,6 +1204,7 @@ const HEROES = {
           const beforeHp = self.hp;
           self.hp = Math.min(self.maxHp, self.hp + BALANCE.heroes.iceSorcerer.critHeal);
           const healed = self.hp - beforeHp;
+          if (healed > 0) queueTacticalUnitCue(self, "heal", healed);
           context.notes.push(`${self.label}消耗 ${context.iceCrit.spent} 个寒冰碎片触发暴击，回复 ${healed} HP，剩余 ${self.flags.iceShards}🧊。`);
         }
         if (context.action.id === "ice-dagger") {
@@ -1112,6 +1221,80 @@ const HEROES = {
           }
         } else {
           self.flags.iceDaggerStreak = 0;
+        }
+      },
+    },
+  },
+  mage: {
+    id: "mage",
+    name: "法师 Mage",
+    maxHp: BALANCE.heroes.mage.maxHp,
+    startingXp: BALANCE.startingXp,
+    description: "通过防御积攒雷电碎片，并用闪电制造连锁打击。",
+    passives: [
+      { name: "雷电碎片", text: `Ji 获得 ${BALANCE.heroes.mage.jiXpGain} XP；每次使用防御获得 1 个⚡` },
+    ],
+    activeSkills: [
+      {
+        id: "mage-lightning",
+        kind: "skill",
+        category: "skill",
+        name: "闪电",
+        cost: 0,
+        power: BALANCE.heroes.mage.lightningPower,
+        range: BALANCE.heroes.mage.lightningRange,
+        defense: BALANCE.defenseGrades.small,
+        xpGain: 0,
+        magicalAttack: true,
+        gunnerSpellKey: "mage-lightning",
+        gunnerSpellName: "闪电",
+        text: `消耗 ${BALANCE.heroes.mage.lightningShardCost}⚡，距离 ${BALANCE.heroes.mage.lightningRange}，冰刀大小；未击中时以目标为来源向其 ${BALANCE.heroes.mage.lightningSplashRange} 格内敌方溅射 Ji刀，本回合小防`,
+        effects: {
+          mageLightning: true,
+          lightningShardCost: BALANCE.heroes.mage.lightningShardCost,
+        },
+      },
+      {
+        id: "mage-thunder-strike",
+        kind: "skill",
+        category: "skill",
+        name: "雷击",
+        cost: 0,
+        power: 0,
+        range: BALANCE.heroes.mage.thunderStrikeRange,
+        defense: 0,
+        xpGain: 0,
+        magicalAttack: true,
+        gunnerSpellKey: "mage-thunder-strike",
+        gunnerSpellName: "雷击",
+        text: `消耗 ${BALANCE.heroes.mage.thunderStrikeShardCost}⚡，距离 ${BALANCE.heroes.mage.thunderStrikeRange}，强度 ${BALANCE.heroes.mage.thunderStrikePower}`,
+        effects: {
+          skillAttack: true,
+          skillAttackPower: BALANCE.heroes.mage.thunderStrikePower,
+          lightningShardCost: BALANCE.heroes.mage.thunderStrikeShardCost,
+        },
+      },
+    ],
+    hooks: {
+      init(self) {
+        self.flags.lightningShards = 0;
+      },
+      canUseAction(action, self) {
+        const shardCost = action.effects?.lightningShardCost || 0;
+        return shardCost <= 0 || (self.flags.lightningShards || 0) >= shardCost;
+      },
+      modifyXpGain(value, self, action) {
+        return action.id === "ji" ? BALANCE.heroes.mage.jiXpGain : value;
+      },
+      afterRound(self, opponent, context) {
+        const shardCost = context.selfAction.effects?.lightningShardCost || 0;
+        if (shardCost > 0) {
+          self.flags.lightningShards = Math.max(0, (self.flags.lightningShards || 0) - shardCost);
+          context.notes.push(`${self.label}消耗 ${shardCost} 个雷电碎片，剩余 ${self.flags.lightningShards}⚡。`);
+        }
+        if (context.selfAction.kind === "defense") {
+          self.flags.lightningShards = (self.flags.lightningShards || 0) + 1;
+          context.notes.push(`${self.label}通过防御积攒 1 个雷电碎片，当前 ${self.flags.lightningShards}⚡。`);
         }
       },
     },
@@ -1163,6 +1346,7 @@ const HEROES = {
         const beforeHp = self.hp;
         self.hp = Math.min(self.maxHp, self.hp + BALANCE.heroes.astrologer.ghostHealPerDamage * context.damage);
         const healed = self.hp - beforeHp;
+        if (healed > 0) queueTacticalUnitCue(self, "heal", healed);
         context.notes.push(`${self.label}的鬼刀吸血，回复 ${healed} HP，当前 ${formatHearts(self.hp)}。`);
       },
       afterRound(self, opponent, context) {
@@ -1255,9 +1439,25 @@ const HEROES = {
     name: "铁壁",
     maxHp: BALANCE.heroes.guard.maxHp,
     startingXp: BALANCE.startingXp,
-    description: `所有防御手势的防御值 +${BALANCE.heroes.guard.defenseBonus}。`,
-    passives: [{ name: "铁壁", text: `防御值 +${BALANCE.heroes.guard.defenseBonus}` }],
-    activeSkills: [],
+    description: `所有防御手势的防御值 +${BALANCE.heroes.guard.defenseBonus}；战术地图中位于薄墙附近时，短攻强度 +${BALANCE.heroes.guard.thinWallAttackBonus}。`,
+    passives: [
+      { name: "铁壁", text: `防御值 +${BALANCE.heroes.guard.defenseBonus}` },
+      { name: "墙斗", text: `位于薄墙附近时，短攻强度 +${BALANCE.heroes.guard.thinWallAttackBonus}` },
+    ],
+    activeSkills: [
+      {
+        id: "guard-build-wall",
+        kind: "skill",
+        category: "skill",
+        name: "筑墙",
+        cost: BALANCE.heroes.guard.buildWallCost,
+        defense: BALANCE.heroes.guard.buildWallDefense,
+        range: 1,
+        xpGain: 0,
+        text: `花费 ${BALANCE.heroes.guard.buildWallCost}，选择相邻 1 格，在两格之间建造持续 ${BALANCE.heroes.guard.buildWallDuration} 回合的薄墙；本回合防御 ${BALANCE.heroes.guard.buildWallDefense}`,
+        effects: { buildThinWall: true },
+      },
+    ],
     hooks: {
       modifyDefense(value, self, action) {
         return action.kind === "defense" ? value + BALANCE.heroes.guard.defenseBonus : value;
@@ -1282,37 +1482,14 @@ const HEROES = {
   },
 };
 
-const HERO_AVATARS = {
-  classic: "./pic/pixel-4.png",
-  assassin: "./pic/assassin.png",
-  astrologer: "./pic/astrologer.png",
-  guard: "./pic/guard.png",
-  hunter: "./pic/hunter.png",
-  iceSorcerer: "./pic/icesorcerer.png",
-  ninja: "./pic/ninja.png",
-  pharmacist: "./pic/pharmacist.png",
-  priest: "./pic/priest.png",
-  vaingloriousWarrior: "./pic/vaingloriouswarrior.png",
-  vampire: "./pic/vampire.png",
-  werewolf: "./pic/werewolf1.png",
-  werewolfBerserk: "./pic/werewolf2.png",
-  dancer:"./pic/dancer.png",
-  hunter:"./pic/hunter.png",
-  woodendummy:"./pic/wood.png",
-  paladin:"./pic/paladin.png",
-  balancedBot:"./pic/bot1.png",
-  ninja:"./pic/ninja.png",
-  puppet:"./pic/puppet.png",
-  gunner:"./pic/gunner.png",
-  battleMage:"./pic/battlemage.png",
-  battery:"./pic/battery.png"
-};
+const HERO_AVATARS = window.JiHeroRegistry?.avatars || {};
 
 const STORAGE_KEYS = {
   playerName: "clapDuel.playerName",
   matchHistory: "clapDuel.matchHistory.v1",
   heroSelection: "clapDuel.heroSelection.v1",
   pharmacistLoadout: "clapDuel.pharmacistLoadout.v1",
+  elfLoadout: "clapDuel.elfLoadout.v1",
 };
 const DEFAULT_PLAYER_NAME = "玩家";
 const MAX_HISTORY_RECORDS = 200;
@@ -1465,6 +1642,9 @@ function makeFighter(label, heroId, options = {}) {
   };
   if (heroId === "pharmacist") {
     fighter.flags.pharmacistLoadout = normalizePharmacistLoadout(options.pharmacistLoadout);
+  }
+  if (heroId === "elf") {
+    fighter.flags.elfLoadout = normalizeElfLoadout(options.elfLoadout);
   }
   runHook(fighter, "init", fighter);
   return fighter;
@@ -1827,6 +2007,7 @@ function formatStatusTag(entry, fighter = null) {
   if ((fighter?.hero?.passives || []).includes(entry)) return entry.name;
   if (entry.name === "寒冰碎片" && entry.text.includes("🧊")) return entry.text.replace(/\s+/g, "");
   if (entry.name === "烈焰炫纹" && entry.text.includes("🔥")) return entry.text.replace(/\s+/g, "");
+  if (entry.name === "雷电碎片" && entry.text.includes("⚡")) return entry.text.replace(/\s+/g, "");
   if (entry.name === "寒冰碎片") return "碎片机制";
   if (entry.name === "炮台") return entry.text === "未装填" ? "炮台未装填" : `炮台 ${entry.text}`;
   if (entry.name === "手里剑") return `手里剑 ${entry.text}`;
@@ -2165,6 +2346,20 @@ function normalizePharmacistLoadout(value) {
   return unique.slice(0, BALANCE.heroes.pharmacist.loadoutSize);
 }
 
+function normalizeElfLoadout(value) {
+  const validIds = ELF_LOADOUT_OPTIONS.map((option) => option.id);
+  const source = Array.isArray(value) ? value : DEFAULT_ELF_LOADOUT;
+  const unique = [];
+  for (const id of source) {
+    if (validIds.includes(id) && !unique.includes(id)) unique.push(id);
+  }
+  for (const id of DEFAULT_ELF_LOADOUT) {
+    if (unique.length >= BALANCE.heroes.elf.loadoutSize) break;
+    if (!unique.includes(id)) unique.push(id);
+  }
+  return unique.slice(0, BALANCE.heroes.elf.loadoutSize);
+}
+
 function getPlayerPharmacistLoadout() {
   try {
     const raw = readStorage(STORAGE_KEYS.pharmacistLoadout);
@@ -2176,6 +2371,19 @@ function getPlayerPharmacistLoadout() {
 
 function savePlayerPharmacistLoadout(loadout) {
   writeStorage(STORAGE_KEYS.pharmacistLoadout, JSON.stringify(normalizePharmacistLoadout(loadout)));
+}
+
+function getPlayerElfLoadout() {
+  try {
+    const raw = readStorage(STORAGE_KEYS.elfLoadout);
+    return normalizeElfLoadout(raw ? JSON.parse(raw) : DEFAULT_ELF_LOADOUT);
+  } catch (error) {
+    return normalizeElfLoadout(DEFAULT_ELF_LOADOUT);
+  }
+}
+
+function savePlayerElfLoadout(loadout) {
+  writeStorage(STORAGE_KEYS.elfLoadout, JSON.stringify(normalizeElfLoadout(loadout)));
 }
 
 function clearCurrentPlayerHistory() {
@@ -2264,6 +2472,9 @@ function getFighterStatusEntries(fighter) {
   }
   if (fighter.flags.flameChasers !== undefined) {
     entries.push({ name: "烈焰炫纹", text: `${"🔥".repeat(Math.min(fighter.flags.flameChasers, 10))} x${fighter.flags.flameChasers}` });
+  }
+  if (fighter.flags.lightningShards !== undefined) {
+    entries.push({ name: "雷电碎片", text: `${"⚡".repeat(Math.min(fighter.flags.lightningShards, 10))} x${fighter.flags.lightningShards}` });
   }
   if (fighter.flags.iceDaggerStreak > 0) {
     entries.push({ name: "Ji刀连出", text: `${fighter.flags.iceDaggerStreak}/${BALANCE.heroes.iceSorcerer.daggerStreakLimit}` });
@@ -2613,7 +2824,7 @@ function isTargetAllowedByTaunt(actor, action, target) {
 
 function isDamageTargetAction(action) {
   if (!action) return false;
-  return action.kind === "attack" || Boolean(action.effects?.skillAttack || action.effects?.prediction);
+  return action.kind === "attack" || Boolean(action.effects?.skillAttack || action.effects?.prediction || action.effects?.mageLightning);
 }
 
 function isTargetAllowedByBlind(actor, action, target) {
@@ -2852,7 +3063,11 @@ function resolveMeleeRound(playerPlans, options = {}) {
     const target = state.melee.fighters.find((fighter) => fighter.id === intent.targetId);
     if (!target || !isFighterTargetable(target) || intent.source.hp <= 0) continue;
     const targetPlan = plans.get(target.id);
-    const defense = targetPlan ? getIncomingDefense(target, targetPlan.action, intent.source) : defenses.get(target.id) || 0;
+    const defense = targetPlan
+      ? intent.source.id === target.id
+        ? getDefense(target, targetPlan.action)
+        : getIncomingDefense(target, targetPlan.action, intent.source)
+      : defenses.get(target.id) || 0;
     const attack = getAttack(intent.source, intent.action, target);
     const absorbSeed = processGunnerIncomingAttack(target, intent.source, intent.action, notes);
     if (attack > defense) {
@@ -3079,13 +3294,19 @@ function applyMeleeHitDamage(hits, logs, notes) {
 
     for (const hit of targetHits) {
       const rewardContext = { ...hit.context, damage: hit.damage, notes };
+      if (hit.context.iceCrit) {
+        const criticalTargets = hit.sourcePlan.context.iceCritTargetIds ||= [];
+        if (!criticalTargets.includes(target.id)) criticalTargets.push(target.id);
+      }
       hit.sourcePlan.context.damageDealt += hit.damage;
       runHook(hit.source, "onDealDamage", hit.source, target, rewardContext);
+      applyElfVampiricAura(hit.source, hit.damage, notes);
       logs.push({ kind: "impact", text: `${hit.source.label}用 ${hit.action.name} 攻击${target.label}，击穿防御 ${formatDefense(hit.defense)}，形成 ${hit.damage} 点伤害。` });
     }
     target.hp -= effectiveDamage;
     logs.push({ kind: "impact", text: `${target.label}本回合受到的最高伤害为 ${maxDamage}，实际 HP -${effectiveDamage}。` });
     runHook(target, "afterTakeDamage", target, strongestHit.source, targetContext);
+    clearElfHolyAuraOnDamage(target, notes);
   }
 }
 
@@ -3154,6 +3375,7 @@ function canAfford(fighter, action) {
 
 function canUseAction(fighter, action) {
   if (isForcedToJi(fighter) && action.id !== "ji") return false;
+  if (hasEffectiveStatus(fighter, "elf-bind") && action.kind === "attack") return false;
   if (!canAfford(fighter, action)) return false;
   return Boolean(runHook(fighter, "canUseAction", action, fighter));
 }
@@ -3165,8 +3387,10 @@ function getActionById(actionId, fighter) {
 function getHeroActions(fighter) {
   const skills = fighter?.hero?.activeSkills || [];
   if (fighter?.heroId === "gunner") return [...skills, ...getGunnerLearnActions(fighter), ...getGunnerTurretActions(fighter)];
-  if (fighter?.heroId !== "pharmacist") return skills;
-  const loadout = fighter.flags.pharmacistLoadout || DEFAULT_PHARMACIST_LOADOUT;
+  if (fighter?.heroId !== "pharmacist" && fighter?.heroId !== "elf") return skills;
+  const loadout = fighter.heroId === "elf"
+    ? fighter.flags.elfLoadout || DEFAULT_ELF_LOADOUT
+    : fighter.flags.pharmacistLoadout || DEFAULT_PHARMACIST_LOADOUT;
   return skills.filter((skill) => loadout.includes(skill.id));
 }
 
@@ -3715,6 +3939,13 @@ function buildActionAnimation(side, targetSide, action, attack, defense, context
   return null;
 }
 
+function queueTacticalUnitCue(fighter, kind, amount = 0) {
+  if (!state?.tactical || !fighter?.id) return;
+  const cues = state.tactical.visualCues ||= [];
+  if (!amount && cues.some((cue) => cue.fighterId === fighter.id && cue.kind === kind && !cue.amount)) return;
+  cues.push({ fighterId: fighter.id, kind, amount: Math.max(0, Number(amount) || 0) });
+}
+
 function dealDamage(attacker, defender, action, text, logs, damageNotes, defenderCard, contextSeed = null) {
   const context = contextSeed || {};
   Object.assign(context, { action, damage: action.damage || 1, notes: damageNotes });
@@ -3725,11 +3956,31 @@ function dealDamage(attacker, defender, action, text, logs, damageNotes, defende
     return 0;
   }
   defender.hp -= damage;
+  queueTacticalUnitCue(defender, "damage", damage);
   logs.push({ kind: "impact", text: text.replace("HP -1", `HP -${damage}`) });
   runHook(attacker, "onDealDamage", attacker, defender, context);
+  applyElfVampiricAura(attacker, damage, context.notes || damageNotes);
   runHook(defender, "afterTakeDamage", defender, attacker, context);
+  clearElfHolyAuraOnDamage(defender, context.notes || damageNotes);
   if (defenderCard) flash(defenderCard);
   return damage;
+}
+
+function applyElfVampiricAura(fighter, damage, notes = []) {
+  if (!hasEffectiveStatus(fighter, "elf-elven-aura") || damage <= 0) return;
+  const before = fighter.hp;
+  fighter.hp = Math.min(fighter.maxHp, fighter.hp + damage);
+  const healed = fighter.hp - before;
+  if (healed > 0) {
+    queueTacticalUnitCue(fighter, "heal", healed);
+    notes.push(`${fighter.label}受到精灵光环庇护，吸血回复 ${healed} HP。`);
+  }
+}
+
+function clearElfHolyAuraOnDamage(fighter, notes = []) {
+  if (!hasEffectiveStatus(fighter, "elf-holy-aura")) return;
+  fighter.statuses = fighter.statuses.filter((status) => status.id !== "elf-holy-aura");
+  notes.push(`${fighter.label}受到伤害，神圣光环消散。`);
 }
 
 function clearRoundPhaseFlags(fighter) {
@@ -3830,6 +4081,9 @@ function getDefense(fighter, action) {
   if (hasEffectiveStatus(fighter, "pharmacist-invincible")) {
     base = Math.max(base, BALANCE.defenseGrades.invincible);
   }
+  if (hasEffectiveStatus(fighter, "elf-elven-aura")) {
+    base = upgradeDefenseValue(base);
+  }
   if (action.effects?.upgradeDefense) {
     base = upgradeDefenseValue(base);
   }
@@ -3880,7 +4134,8 @@ function getCost(fighter, action) {
 
 function getXpGain(fighter, action) {
   const base = action.xpGain || 0;
-  return runHook(fighter, "modifyXpGain", base, fighter, action);
+  const modified = runHook(fighter, "modifyXpGain", base, fighter, action);
+  return action.id === "ji" && hasEffectiveStatus(fighter, "elf-holy-aura") ? modified + 1 : modified;
 }
 
 function getDamage(attacker, defender, action, context) {
@@ -3945,6 +4200,7 @@ function addIceShards(fighter, amount) {
 function setStatus(fighter, status) {
   fighter.statuses = fighter.statuses.filter((entry) => entry.id !== status.id);
   fighter.statuses.push(status);
+  queueTacticalUnitCue(fighter, status.type === "negative" ? "debuff" : "buff");
 }
 
 function markRoundPositiveEffect(fighter, name) {
@@ -3952,6 +4208,7 @@ function markRoundPositiveEffect(fighter, name) {
   const effects = fighter.flags.roundPositiveEffects || [];
   if (!effects.includes(name)) effects.push(name);
   fighter.flags.roundPositiveEffects = effects;
+  queueTacticalUnitCue(fighter, "buff");
 }
 
 function reviveAsClassic(fighter) {
@@ -3967,6 +4224,37 @@ function reviveAsClassic(fighter) {
 }
 
 function applyPostDefenseSkillEffects(fighter, action, target, targetDefense, logs) {
+  if (action.effects?.elfElvenAura) {
+    setStatus(target, {
+      id: "elf-elven-aura", type: "positive", name: "精灵光环",
+      text: `${BALANCE.heroes.elf.elvenAuraTurns} 回合 · 防御升一大级 / 吸血`,
+      turns: BALANCE.heroes.elf.elvenAuraTurns, fresh: true, delayed: true,
+    });
+    logs.push({ text: `${fighter.label}施放精灵光环，${target.label}接下来 ${BALANCE.heroes.elf.elvenAuraTurns} 回合防御升一大级并获得吸血。` });
+  }
+
+  if (action.effects?.elfHolyAura) {
+    setStatus(target, {
+      id: "elf-holy-aura", type: "positive", name: "神圣光环",
+      text: `${BALANCE.heroes.elf.holyAuraTurns} 回合 · Ji 效率 +1`,
+      turns: BALANCE.heroes.elf.holyAuraTurns, fresh: true, delayed: true,
+    });
+    logs.push({ text: `${fighter.label}施放神圣光环，${target.label}接下来 ${BALANCE.heroes.elf.holyAuraTurns} 回合 Ji 效率 +1，受伤即消失。` });
+  }
+
+  if (action.effects?.elfBind) {
+    if (targetDefense >= BALANCE.defenseGrades.mid) {
+      logs.push({ text: `${fighter.label}使用缴械，但${target.label}的中防抵挡了效果。` });
+    } else {
+      setStatus(target, {
+        id: "elf-bind", type: "negative", name: "缴械",
+        text: `${BALANCE.heroes.elf.bindTurns} 回合 · 不能攻击`,
+        turns: BALANCE.heroes.elf.bindTurns, fresh: true, delayed: true,
+      });
+      logs.push({ text: `${fighter.label}使用缴械，${target.label}下 ${BALANCE.heroes.elf.bindTurns} 回合不能使用攻击。` });
+    }
+  }
+
   if (action.effects?.skillAttack) {
     const attack = action.effects.skillAttackPower || action.power || 0;
     const damageAction = {
@@ -4078,6 +4366,7 @@ function tickStatuses(fighter, notes) {
       context.damage = damage;
       if (damage > 0) {
         fighter.hp -= damage;
+        queueTacticalUnitCue(fighter, "damage", damage);
         notes.push(`${fighter.label}受到${status.name}影响，HP -${damage}。`);
         runHook(fighter, "afterTakeDamage", fighter, null, context);
       } else {
@@ -4090,7 +4379,9 @@ function tickStatuses(fighter, notes) {
       remaining.push(status);
     } else {
       if (status.effects?.healTo && fighter.hp > 0 && fighter.hp < status.effects.healTo) {
+        const beforeHp = fighter.hp;
         fighter.hp = Math.min(fighter.maxHp, status.effects.healTo);
+        queueTacticalUnitCue(fighter, "heal", fighter.hp - beforeHp);
         notes.push(`${fighter.label}的${status.name}生效，HP 恢复至 ${fighter.hp}。`);
       }
       notes.push(`${fighter.label}的${status.name}结束。`);
@@ -4199,7 +4490,14 @@ function applyPreDamageEffects(fighter, action, logs, target = fighter) {
   if (effects.heal) {
     const beforeHp = target.hp;
     target.hp = Math.min(target.maxHp, target.hp + effects.heal);
-    details.push(`回复 ${target.hp - beforeHp} HP`);
+    const healed = target.hp - beforeHp;
+    if (healed > 0) queueTacticalUnitCue(target, "heal", healed);
+    details.push(`回复 ${healed} HP`);
+  }
+
+  if (effects.elfEnergyTransfer) {
+    target.xp += BALANCE.heroes.elf.energyTransferAmount;
+    details.push(`${target === fighter ? "自身" : "目标"}在下回合开始前获得 ${BALANCE.heroes.elf.energyTransferAmount} XP`);
   }
 
   if (effects.upgradeDefense) details.push("本回合防御升一大级");

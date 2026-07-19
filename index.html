@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Projekt Ji - 战术原型</title>
-    <link rel="stylesheet" href="./styles.css?v=map-select-20260712-2" />
+    <link rel="stylesheet" href="./styles.css?v=ice-sorcerer-20260719-1" />
+    <link rel="stylesheet" href="./battle-iso.css?v=ice-sorcerer-20260719-1" />
   </head>
   <body>
     <main id="tacticalShell" class="tactical-shell" data-phase="movement">
@@ -13,11 +14,18 @@
           <div class="map-heading">
             <div>
               <span class="eyebrow">固定战场</span>
-              <h2>潮汐遗迹</h2>
+              <h2 id="tacticalMapName">默认潮汐遗迹</h2>
             </div>
-            <p id="mapHint">选择移动路径，再选择行动卡。</p>
+            <div class="map-heading-actions">
+              <p id="mapHint">选择移动路径，再选择行动卡。</p>
+              <button id="tactical3dToggle" class="map-view-toggle" type="button" aria-pressed="false" title="切换 3D 战术视图">3D 战术</button>
+            </div>
           </div>
           <div id="tacticalMap" class="tactical-map" role="grid" aria-label="8乘8战术地图"></div>
+          <div id="tactical3dStage" class="tactical-3d-stage" aria-label="3D 战术地图" hidden>
+            <canvas id="tactical3dCanvas"></canvas>
+            <div class="tactical-3d-hud" aria-hidden="true">拖动旋转 · 滚轮缩放 · 点击格子操作</div>
+          </div>
           <div class="terrain-legend" aria-label="地形图例">
             <span><i class="legend-swatch floor"></i>地面</span>
             <span><i class="legend-swatch bush"></i>草丛 · 隐形</span>
@@ -30,9 +38,10 @@
 
         <aside class="enemy-panel" aria-label="敌方状态与战斗日志">
           <section class="side-brand" aria-label="游戏标题">
-            <h1>Projekt Ji</h1>
+            <h1>Projekt 8</h1>
             <div class="side-brand-actions">
               <span id="tacticalModeLabel" class="prototype-label">1v1 战术</span>
+              <a class="side-menu-button world-map-link" href="./world.html">世界</a>
               <button id="tacticalMapSelectBtn" class="side-menu-button" type="button" aria-haspopup="dialog">地图</button>
               <button id="tacticalMenuBtn" class="side-menu-button" type="button" aria-haspopup="dialog" aria-expanded="true">Menu</button>
             </div>
@@ -86,7 +95,9 @@
             </div>
             <button id="battleMageImprintBtn" class="battle-mage-toggle" type="button" aria-pressed="false" hidden>表</button>
             <div id="actionFilters" class="action-filters" role="group" aria-label="行动类别筛选">
-              <button type="button" data-filter="available" aria-pressed="true">当前可用</button>
+              <button type="button" data-filter="recommended" aria-pressed="true">推荐</button>
+              <button type="button" data-filter="available" aria-pressed="false">当前可用</button>
+              <button type="button" data-filter="all" aria-pressed="false">全部</button>
               <button type="button" data-filter="charge" aria-pressed="false">蓄气</button>
               <button type="button" data-filter="defense" aria-pressed="false">防御</button>
               <button type="button" data-filter="range-1" aria-pressed="false">短攻</button>
@@ -108,6 +119,19 @@
           </div>
         </aside>
       </section>
+
+      <aside id="tutorialGuide" class="tutorial-guide" aria-live="polite" hidden>
+        <div class="tutorial-guide-head">
+          <span id="tutorialKicker" class="eyebrow">新手引导</span>
+          <button id="tutorialSkipBtn" type="button">跳过</button>
+        </div>
+        <h2 id="tutorialTitle">第一课</h2>
+        <p id="tutorialText"></p>
+        <div class="tutorial-guide-foot">
+          <span id="tutorialProgress">1 / 6</span>
+          <button id="tutorialNextBtn" type="button">开始</button>
+        </div>
+      </aside>
 
       <section class="setup-strip" aria-label="对战设置">
         <div class="setup-menu-head">
@@ -192,7 +216,12 @@
     </div>
 
     <script>window.__JI_TACTICAL_REBUILD__ = true;</script>
-    <script src="./game.js?v=scoring-map-20260712-4"></script>
-    <script src="./tactical.js?v=online-authority-20260713-1"></script>
+    <script src="./hero-registry.js?v=foundation-20260719-1"></script>
+    <script src="./tactical-core.js?v=foundation-20260719-1"></script>
+    <script src="./game.js?v=foundation-20260719-1"></script>
+    <script src="./tactical.js?v=foundation-20260719-1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+    <script src="./classic-warrior-model.js?v=classic-warrior-3d-1"></script>
+    <script src="./tactical-3d.js?v=arena-classic-warrior-3d-1"></script>
   </body>
 </html>

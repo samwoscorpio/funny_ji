@@ -1,0 +1,389 @@
+/*
+ * Tide Ruins 2D skin. This file intentionally changes only the existing DOM
+ * presentation hooks: all map coordinates, interaction and tactical state live
+ * in tactical.js and remain untouched.
+ */
+
+.tactical-map {
+  --ruin-ink: #101719;
+  --ruin-stone: #343a3c;
+  --ruin-line: #697174;
+  /* A wide, shallow hex reads as an oblique/isometric battle field. */
+  --hex-width: clamp(88px, 7.2vw, 116px);
+  --hex-height: clamp(58px, 4.9vw, 78px);
+  --hex-label: clamp(17px, 1.35vw, 23px);
+  position: relative;
+  isolation: isolate;
+  padding: clamp(12px, 2vw, 20px) clamp(14px, 2.4vw, 27px) clamp(18px, 2.6vw, 28px);
+  border-color: #172124;
+  outline-color: #6d512a;
+  background:
+    radial-gradient(ellipse at 50% 43%, rgba(49, 100, 108, 0.18), transparent 41%),
+    linear-gradient(90deg, rgba(2, 17, 22, 0.9), transparent 13%, transparent 87%, rgba(2, 17, 22, 0.9)),
+    linear-gradient(180deg, #0a171b 0, #0d2228 48%, #07161b 100%);
+  box-shadow:
+    inset 0 0 0 2px #060908,
+    inset 0 0 55px rgba(0, 0, 0, 0.9),
+    0 8px 20px rgba(0, 0, 0, 0.62);
+}
+
+.tactical-map::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 7% 1.2% 2%;
+  opacity: 0.9;
+  background:
+    linear-gradient(90deg, rgba(14, 100, 121, 0.8), transparent 11%, transparent 89%, rgba(14, 100, 121, 0.8)),
+    repeating-linear-gradient(135deg, rgba(93, 213, 221, 0.12) 0 1px, transparent 1px 6px);
+  clip-path: polygon(3% 5%, 97% 5%, 100% 50%, 97% 95%, 3% 95%, 0 50%);
+  filter: saturate(1.25);
+  pointer-events: none;
+}
+
+.hex-column-labels,
+.hex-row-label {
+  color: #c8c4aa;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+  text-shadow: 1px 1px 0 #050807, 0 0 6px rgba(87, 198, 218, 0.25);
+}
+
+.hex-row-tiles {
+  filter: drop-shadow(0 6px 0 rgba(1, 5, 7, 0.62));
+}
+
+.hex-row {
+  height: calc(var(--hex-height) * 0.75);
+}
+
+.hex-tile {
+  filter: drop-shadow(0 5px 0 rgba(4, 9, 11, 0.78));
+}
+
+.hex-tile::before {
+  box-shadow:
+    inset 0 0 0 1px rgba(196, 205, 193, 0.45),
+    inset 0 -11px 12px rgba(0, 0, 0, 0.58),
+    inset 0 8px 7px rgba(197, 210, 194, 0.1),
+    0 7px 0 rgba(6, 11, 13, 0.7);
+}
+
+.map-tile.floor,
+.map-tile.wall,
+.map-tile.bush,
+.map-tile.energy,
+.map-tile.objective {
+  background-color: var(--ruin-stone);
+  background-image:
+    linear-gradient(30deg, transparent 48%, rgba(0, 0, 0, 0.28) 49% 51%, transparent 52%),
+    linear-gradient(150deg, transparent 48%, rgba(166, 177, 176, 0.14) 49% 50%, transparent 51%),
+    linear-gradient(180deg, rgba(102, 112, 114, 0.35), rgba(33, 39, 41, 0.72));
+  box-shadow: inset 0 0 0 1px #111718, inset 0 0 0 3px rgba(123, 132, 130, 0.13);
+}
+
+.hex-tile::before {
+  z-index: 8;
+  box-shadow:
+    inset 0 0 0 1px rgba(162, 172, 165, 0.42),
+    inset 0 -8px 12px rgba(0, 0, 0, 0.48),
+    inset 0 9px 8px rgba(188, 202, 191, 0.07);
+}
+
+.map-tile.floor {
+  background-image:
+    radial-gradient(circle at 25% 24%, rgba(162, 177, 169, 0.2) 0 1px, transparent 2px),
+    radial-gradient(circle at 73% 66%, rgba(2, 7, 8, 0.52) 0 1px, transparent 2px),
+    linear-gradient(30deg, transparent 48%, rgba(0, 0, 0, 0.28) 49% 51%, transparent 52%),
+    linear-gradient(150deg, transparent 48%, rgba(166, 177, 176, 0.14) 49% 50%, transparent 51%),
+    linear-gradient(180deg, #4a5151, #242b2d 72%, #181f20);
+}
+
+.map-tile.wall {
+  cursor: not-allowed;
+  background:
+    linear-gradient(90deg, rgba(12, 15, 15, 0.8) 0 9%, transparent 9% 91%, rgba(12, 15, 15, 0.8) 91%),
+    repeating-linear-gradient(90deg, #5e625e 0 12px, #303432 12px 15px),
+    linear-gradient(180deg, #858078 0 17%, #4e4b46 17% 78%, #252522 78%);
+  box-shadow: inset 0 7px 0 #9a958b, inset 0 -9px 0 #1d1d1c, inset 0 0 0 1px #171816;
+}
+
+.map-tile.wall::after {
+  z-index: 3;
+  inset: 17% 12% 20%;
+  border-top: 5px solid #a29c91;
+  border-bottom: 6px solid #171716;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.09), transparent 40%),
+    repeating-linear-gradient(90deg, #62605b 0 11px, #343330 11px 14px);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.5);
+}
+
+.map-tile.bush {
+  background:
+    radial-gradient(ellipse at 18% 52%, #8ca341 0 13%, transparent 14%),
+    radial-gradient(ellipse at 42% 35%, #537d31 0 18%, transparent 19%),
+    radial-gradient(ellipse at 65% 59%, #6e9638 0 20%, transparent 21%),
+    radial-gradient(ellipse at 86% 40%, #496c2c 0 16%, transparent 17%),
+    linear-gradient(180deg, #2f4b28, #172c24 78%);
+  box-shadow: inset 0 0 0 1px rgba(137, 168, 89, 0.35), inset 0 -10px 14px rgba(1, 14, 10, 0.5);
+}
+
+.map-tile.bush::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  inset: 10% 5% 3%;
+  clip-path: inherit;
+  background: repeating-linear-gradient(112deg, transparent 0 6px, rgba(181, 204, 95, 0.24) 7px 8px, transparent 9px 14px);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.map-tile.energy {
+  background:
+    radial-gradient(circle at 50% 52%, rgba(53, 230, 255, 0.32), transparent 31%),
+    linear-gradient(180deg, #31484c, #1b292d 76%, #151d1e);
+}
+
+.map-tile.energy::after {
+  z-index: 4;
+  inset: 25% 33% 28%;
+  border: 1px solid #d0fbff;
+  background: linear-gradient(135deg, #efffff 0 16%, #6cefff 18% 48%, #1788ad 50% 100%);
+  box-shadow: 0 0 7px #69eeff, 0 0 17px rgba(43, 199, 255, 0.95), 0 6px 11px rgba(0, 72, 103, 0.85);
+  transform: rotate(45deg);
+}
+
+.map-tile.objective {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 189, 86, 0.16), transparent 42%),
+    linear-gradient(180deg, #4a4640, #252829 76%, #171c1c);
+}
+
+.map-tile.objective::after {
+  z-index: 4;
+  inset: 23%;
+  border: 3px solid #ffcf68;
+  background:
+    radial-gradient(circle, #fff0a9 0 7%, #eea536 9% 18%, #8a3a20 20% 39%, #352018 41% 59%, transparent 61%),
+    repeating-conic-gradient(from 0deg, #d6872e 0 8deg, #68371f 8deg 17deg);
+  box-shadow: 0 0 8px #f5a338, 0 0 22px rgba(234, 113, 31, 0.83), inset 0 0 8px #160d08;
+}
+
+.thin-wall-edge {
+  z-index: 11;
+  border: 1px solid #b6aa8d;
+  background: repeating-linear-gradient(90deg, #81755f 0 5px, #292a28 5px 7px);
+  box-shadow: 0 2px 0 #0b0d0d, 0 0 6px rgba(228, 192, 114, 0.28);
+}
+
+.map-target-marker.energy {
+  z-index: 5;
+  border-color: rgba(205, 255, 255, 0.85);
+  background: radial-gradient(circle, #f2ffff 0 11%, #50e7ff 13% 30%, rgba(25, 152, 184, 0.15) 32% 64%, transparent 66%);
+}
+
+.map-target-marker.objective {
+  z-index: 5;
+  border-color: #ffe2a0;
+  background: radial-gradient(circle, #fff0ac 0 10%, #efad3e 12% 28%, #9c4523 30% 49%, rgba(59, 28, 19, 0.15) 51% 68%, transparent 70%);
+}
+
+.map-tile.reachable::before,
+.map-tile.path::before,
+.map-tile.targetable::before,
+.map-tile.target-selected::before {
+  z-index: 12;
+}
+
+.map-tile.reachable::before {
+  box-shadow: inset 0 0 0 3px #4ec8ff, inset 0 0 13px rgba(49, 164, 226, 0.66);
+}
+
+.map-tile.path {
+  background-blend-mode: screen, normal;
+  filter: saturate(1.2) brightness(1.16);
+}
+
+.map-tile.path::before {
+  box-shadow: inset 0 0 0 3px #bdf6ff, inset 0 0 16px rgba(53, 202, 246, 0.88);
+}
+
+.map-tile.path::after {
+  z-index: 13;
+  right: 20%;
+  bottom: 17%;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dfffff;
+  border-radius: 50%;
+  color: #dfffff;
+  background: #105b79;
+  box-shadow: 0 1px 0 #061318, 0 0 5px #42c9f4;
+  font-size: 9px;
+}
+
+.map-tile.targetable::before {
+  box-shadow: inset 0 0 0 3px #e75d4e, inset 0 0 15px rgba(220, 69, 48, 0.72);
+}
+
+.map-tile.target-selected::before {
+  box-shadow: inset 0 0 0 3px #ffd263, inset 0 0 18px rgba(255, 178, 61, 0.84);
+}
+
+.map-tile.flame::before {
+  box-shadow: inset 0 0 0 2px #fa6a32, inset 0 0 17px rgba(242, 87, 23, 0.78);
+}
+
+.flame-token {
+  z-index: 6;
+  right: 28%;
+  bottom: 21%;
+  background: linear-gradient(135deg, #fff2a6 0 12%, #ffbd36 13% 40%, #ec5724 42% 100%);
+  box-shadow: 0 0 8px #ff7b32, 0 0 18px rgba(248, 79, 20, 0.88);
+}
+
+/* Production sprite layer. The visual skin stays separate from the map rules. */
+.map-tile.floor,
+.map-tile.energy,
+.map-tile.objective,
+.map-tile.wall,
+.map-tile.bush {
+  background: #222927 url("./assets/pixel-arena/sprites/hex-floor-v1.png") center / 100% 100% no-repeat;
+}
+
+.map-tile.wall::after {
+  inset: -10% -6% -17%;
+  border: 0;
+  background: url("./assets/pixel-arena/sprites/terrain-boulder-v1.png") center bottom / 100% auto no-repeat;
+  box-shadow: none;
+}
+
+.map-tile.bush::after {
+  inset: -12% -7% -8%;
+  clip-path: none;
+  background: url("./assets/pixel-arena/sprites/terrain-tall-grass-v1.png") center bottom / 100% auto no-repeat;
+  opacity: 1;
+}
+
+.map-tile.energy::after,
+.map-tile.objective::after,
+.map-target-marker.energy::after,
+.map-target-marker.objective::before,
+.map-target-marker.objective::after,
+.flame-token::after {
+  display: none;
+}
+
+.map-target-marker.energy {
+  width: 70%;
+  height: 94%;
+  border: 0;
+  clip-path: none;
+  background: url("./assets/pixel-arena/sprites/energy-crystal-v1.png") center bottom / contain no-repeat;
+  box-shadow: none;
+}
+
+.map-target-marker.objective {
+  width: 118%;
+  height: 118%;
+  border: 0;
+  border-radius: 0;
+  background: url("./assets/pixel-arena/sprites/objective-altar-idle-v1.png") center / contain no-repeat;
+  box-shadow: none;
+}
+
+.flame-token {
+  right: 22%;
+  bottom: 12%;
+  width: 56%;
+  height: 60%;
+  clip-path: none;
+  background: url("./assets/pixel-arena/sprites/hazard-flame-v1.png") center bottom / contain no-repeat;
+  box-shadow: none;
+}
+
+.map-tile.reachable::before,
+.map-tile.path::before,
+.map-tile.targetable::before,
+.map-tile.target-selected::before {
+  box-shadow: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+.map-tile.reachable::before,
+.map-tile.path::before {
+  background-image: url("./assets/pixel-arena/sprites/overlay-move-blue-v1.png");
+}
+
+.map-tile.targetable::before {
+  background-image: url("./assets/pixel-arena/sprites/overlay-attack-red-v1.png");
+}
+
+.map-tile.target-selected::before {
+  background-image: url("./assets/pixel-arena/sprites/overlay-selected-gold-v1.png");
+}
+
+.unit-token {
+  z-index: 10;
+  inset: 7%;
+  border-radius: 0;
+  background: #131a19;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.48);
+}
+
+.unit-token::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 15%;
+  right: 15%;
+  bottom: 9%;
+  height: 20%;
+  border: 2px solid #cbd8d0;
+  border-radius: 50%;
+  background: rgba(7, 14, 15, 0.7);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.76);
+}
+
+.unit-token::after {
+  box-shadow: inset 0 0 0 2px #d0d2c2, inset 0 -9px 11px rgba(0, 0, 0, 0.58);
+}
+
+.unit-token.player::before,
+.unit-token.player-b::before { border-color: #56d7ff; box-shadow: 0 0 8px rgba(62, 205, 255, 0.8), 0 2px 0 rgba(0, 0, 0, 0.76); }
+.unit-token.enemy::before,
+.unit-token.enemy-b::before { border-color: #ef634d; box-shadow: 0 0 8px rgba(244, 87, 58, 0.72), 0 2px 0 rgba(0, 0, 0, 0.76); }
+
+.unit-token img {
+  transform: scale(1.09) translateY(-2%);
+  object-position: center 28%;
+  filter: contrast(1.12) saturate(0.94) brightness(1.04);
+}
+
+@media (max-width: 1120px) {
+  .tactical-map { padding-inline: 10px; }
+  .tactical-map::before { inset-inline: 0; }
+}
+
+@media (max-width: 760px) {
+  .tactical-map {
+    --hex-width: calc((100vw - 54px) / 8.45);
+    --hex-height: calc((100vw - 54px) / 12.4);
+    --hex-label: 15px;
+    padding: 8px 6px 12px;
+  }
+  .thin-wall-edge { box-shadow: 0 1px 0 #0b0d0d; }
+  .map-tile.wall::after { border-top-width: 3px; border-bottom-width: 3px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-target-marker.energy,
+  .map-target-marker.objective,
+  .flame-token { animation: none; }
+}

@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Projekt Ji - 战场显示实验</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      min-width: 320px;
+      margin: 0;
+      color: #eee5c6;
+      background: #061116;
+      font-family: ui-serif, Georgia, "Noto Serif SC", serif;
+    }
+    main { width: min(1440px, 100%); margin: 0 auto; padding: clamp(12px, 2vw, 28px); }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+    h1 { margin: 0; color: #f0c763; font-size: clamp(20px, 2.6vw, 38px); letter-spacing: 0; }
+    p { margin: 0; color: #b7af91; font: 600 clamp(12px, 1.4vw, 16px)/1.5 system-ui, sans-serif; }
+    .arena {
+      position: relative;
+      overflow: hidden;
+      border: 2px solid #8e6d35;
+      box-shadow: inset 0 0 0 4px #1a130b, inset 0 0 80px #000, 0 14px 40px #000;
+      background:
+        radial-gradient(ellipse at 50% 47%, rgba(15, 94, 112, .48), transparent 44%),
+        repeating-linear-gradient(135deg, rgba(83, 201, 219, .08) 0 1px, transparent 1px 12px),
+        #06222b;
+    }
+    svg { display: block; width: 100%; height: auto; }
+    .hex { stroke: #111d20; stroke-width: 3; vector-effect: non-scaling-stroke; }
+    .hex-floor { fill: url(#floor); }
+    .hex-inner { fill: none; stroke: rgba(214, 229, 207, .15); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .hex-shadow { fill: #071013; opacity: .55; }
+    .floor-texture { image-rendering: pixelated; }
+    .island-depth { fill: url(#islandSide); stroke: #0a171a; stroke-width: 2; vector-effect: non-scaling-stroke; }
+    .island-course { stroke: rgba(103, 139, 134, .45); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    .island-rune { fill: #1b8c99; opacity: .55; filter: url(#cyanGlow); }
+    .terrain-prop { image-rendering: pixelated; pointer-events: none; }
+    .terrain-grass, .terrain-altar { filter: none; }
+    .terrain-boulder { filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .42)); }
+    .terrain-energy { filter: url(#cyanGlow); }
+    .terrain-wall { filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .48)); }
+    .grid-label { fill: #e8ddba; font: 700 16px system-ui, sans-serif; text-anchor: middle; }
+    .row-label { text-anchor: end; }
+    .grass { fill: url(#grass); stroke: #274b26; stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .grass-veins { stroke: rgba(198, 232, 91, .55); stroke-width: 2; vector-effect: non-scaling-stroke; }
+    .thin-wall { stroke: #887450; stroke-width: 10; stroke-linecap: round; vector-effect: non-scaling-stroke; filter: url(#wallShadow); }
+    .thin-wall-highlight { stroke: #dbc98c; stroke-width: 2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+    .crystal-glow { filter: url(#cyanGlow); }
+    .unit-ring-blue { fill: none; stroke: #5ee6ff; stroke-width: 5; vector-effect: non-scaling-stroke; filter: url(#cyanGlow); }
+    .unit-ring-red { fill: none; stroke: #ff765c; stroke-width: 5; vector-effect: non-scaling-stroke; filter: url(#redGlow); }
+    .unit-piece { filter: url(#unitShadow); }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 2px 0; color: #d1c49f; font: 700 12px system-ui, sans-serif; }
+    .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 5px; vertical-align: -2px; border: 1px solid #b38b45; background: #4b5553; }
+    .legend .green { background: #547f30; } .legend .cyan { background: #56dfff; } .legend .gold { background: #d48a2c; }
+    @media (max-width: 700px) { main { padding: 10px; } header { align-items: flex-start; flex-direction: column; gap: 2px; } .grid-label { font-size: 11px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>潮汐遗迹 · 战场显示实验</h1><p>仅验证地图美术与格子几何，不影响正式对战。</p></header>
+    <section class="arena" aria-label="8乘8像素战场预览">
+      <svg id="arenaSvg" viewBox="0 0 1200 800" role="img" aria-label="像素风六边形战场"></svg>
+    </section>
+    <div class="legend"><span><i></i>石质地块</span><span><i class="gold"></i>圆形祭坛据点</span><span><i class="green"></i>隐蔽草丛</span><span><i class="cyan"></i>能量晶体</span><span><i></i>巨石与薄墙</span></div>
+  </main>
+  <script>
+    const svg = document.querySelector('#arenaSvg');
+    const ns = 'http://www.w3.org/2000/svg';
+    const rows = 8, cols = 8;
+    // Preserve the game's original pointy-top topology: each row has direct left/right
+    // neighbours. Only the drawn tile is widened for the isometric ground-plane look.
+    const radius = 56, radiusX = 70, tileHeight = radius * 2, dx = radiusX * 2, dy = radius * 1.5;
+    const origin = { x: 112, y: 104 };
+    const point = (row, col) => ({ x: origin.x + col * dx + (row & 1 ? radiusX : 0), y: origin.y + row * dy });
+    const cellPoint = (row, col, localX = 0, localY = 0) => {
+      const center = point(row, col);
+      return { x: center.x + localX, y: center.y + localY };
+    };
+    const cellVertices = (r = radius, height = tileHeight) => [
+      [0, -height / 2], [radiusX * r / radius, -height / 4], [radiusX * r / radius, height / 4],
+      [0, height / 2], [-radiusX * r / radius, height / 4], [-radiusX * r / radius, -height / 4]
+    ];
+    const cellPolygon = (row, col, r = radius, offsetX = 0, offsetY = 0, height = tileHeight * r / radius) => cellVertices(r, height).map(([x, y]) => {
+      const p = cellPoint(row, col, x + offsetX, y + offsetY);
+      return `${p.x},${p.y}`;
+    }).join(' ');
+    const edgePoints = (row, col, direction, inset = 4) => {
+      const vertices = cellVertices(radius - inset, tileHeight * (radius - inset) / radius);
+      const start = vertices[direction % 6];
+      const end = vertices[(direction + 1) % 6];
+      return [cellPoint(row, col, start[0], start[1]), cellPoint(row, col, end[0], end[1])];
+    };
+    const add = (name, attrs, parent = svg) => { const el = document.createElementNS(ns, name); Object.entries(attrs).forEach(([key, value]) => el.setAttribute(key, value)); parent.append(el); return el; };
+    svg.innerHTML = `
+      <defs>
+        <linearGradient id="floor" x1="0" y1="0" x2="0.9" y2="1"><stop stop-color="#5c625d"/><stop offset=".55" stop-color="#414946"/><stop offset="1" stop-color="#27302f"/></linearGradient>
+        <linearGradient id="islandSide" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#334648"/><stop offset=".36" stop-color="#203032"/><stop offset="1" stop-color="#0a171a"/></linearGradient>
+        <radialGradient id="grass"><stop stop-color="#9abe4e"/><stop offset=".55" stop-color="#567d2d"/><stop offset="1" stop-color="#264b27"/></radialGradient>
+        <radialGradient id="altar"><stop stop-color="#fff0a7"/><stop offset=".2" stop-color="#f3a73f"/><stop offset=".55" stop-color="#a84a24"/><stop offset="1" stop-color="#371b15"/></radialGradient>
+        <filter id="cyanGlow"><feGaussianBlur stdDeviation="6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="redGlow"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="wallShadow"><feDropShadow dx="2" dy="5" stdDeviation="2" flood-opacity=".75"/></filter>
+        <filter id="unitShadow"><feDropShadow dx="0" dy="7" stdDeviation="4" flood-opacity=".72"/></filter>
+      </defs>`;
+    const defs = svg.querySelector('defs');
+    const depthLayer = add('g', { 'aria-hidden': 'true' });
+    const floorLayer = add('g', {});
+    const terrainLayer = add('g', { 'aria-label': '地图地物' });
+    const floorTextures = [
+      './assets/iso-arena/terrain/iso-floor-variant-a-v1.png',
+      './assets/iso-arena/terrain/iso-floor-variant-b-v1.png',
+      './assets/iso-arena/terrain/iso-floor-variant-c-v1.png',
+      './assets/iso-arena/terrain/iso-floor-variant-d-v1.png'
+    ];
+    const fmtPoint = point => `${Math.round(point.x * 10) / 10},${Math.round(point.y * 10) / 10}`;
+    const edgeKey = (a, b) => [fmtPoint(a), fmtPoint(b)].sort().join('|');
+    const cellEdges = (row, col) => {
+      const vertices = cellVertices().map(([x, y]) => cellPoint(row, col, x, y));
+      return vertices.map((start, index) => ({ start, end: vertices[(index + 1) % vertices.length] }));
+    };
+    const buildIslandDepth = () => {
+      const edges = new Map();
+      for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
+        cellEdges(row, col).forEach(edge => {
+          const key = edgeKey(edge.start, edge.end);
+          if (edges.has(key)) edges.get(key).count += 1;
+          else edges.set(key, { ...edge, count: 1 });
+        });
+      }
+      [...edges.values()].filter(edge => edge.count === 1).forEach((edge, index) => {
+        const drop = 31;
+        const lowerStart = { x: edge.start.x, y: edge.start.y + drop };
+        const lowerEnd = { x: edge.end.x, y: edge.end.y + drop };
+        add('polygon', {
+          points: [edge.start, edge.end, lowerEnd, lowerStart].map(fmtPoint).join(' '),
+          class: 'island-depth'
+        }, depthLayer);
+        const midA = { x: edge.start.x, y: edge.start.y + drop * .48 };
+        const midB = { x: edge.end.x, y: edge.end.y + drop * .48 };
+        add('line', { x1: midA.x, y1: midA.y, x2: midB.x, y2: midB.y, class: 'island-course' }, depthLayer);
+        if (index % 4 === 0) {
+          const centerX = (edge.start.x + edge.end.x) / 2;
+          const centerY = (edge.start.y + edge.end.y) / 2 + drop * .7;
+          add('rect', { x: centerX - 3, y: centerY - 2, width: 6, height: 4, rx: 1, class: 'island-rune' }, depthLayer);
+        }
+      });
+    };
+    buildIslandDepth();
+    const addFloorTexture = (row, col) => {
+      const clipId = `floor-clip-${row}-${col}`;
+      const clip = add('clipPath', { id: clipId }, defs);
+      add('polygon', { points: cellPolygon(row, col, radius - 2) }, clip);
+      const texture = add('g', { 'clip-path': `url(#${clipId})` }, floorLayer);
+      const p = point(row, col);
+      // Coordinate hash makes the mix feel organic while remaining stable on every refresh.
+      const textureIndex = Math.abs((row * 73856093) ^ (col * 19349663) ^ ((row + col) * 83492791)) % floorTextures.length;
+      // The bitmap is clipped by the mathematical cell, so the art can never create gaps or overlaps.
+      add('image', {
+        href: floorTextures[textureIndex],
+        // The source image has a transparent safety margin. These bounds fit the painted
+        // stone surface to the cell itself, while the clip keeps every tile exact.
+        x: p.x - 96,
+        y: p.y - 61.5,
+        width: 192,
+        height: 123,
+        preserveAspectRatio: 'none',
+        class: 'floor-texture'
+      }, texture);
+    };
+    for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
+      add('polygon', { points: cellPolygon(row, col, radius, 0, 10), class: 'hex-shadow' }, floorLayer);
+      add('polygon', { points: cellPolygon(row, col), class: 'hex hex-floor' }, floorLayer);
+      add('polygon', { points: cellPolygon(row, col, radius - 5), class: 'hex-inner' }, floorLayer);
+      addFloorTexture(row, col);
+    }
+    const terrainObject = (path, row, col, width, height, className, offsetY = 0) => {
+      const p = point(row, col);
+      return add('image', {
+        href: path,
+        x: p.x - width / 2,
+        y: p.y - height / 2 + offsetY,
+        width,
+        height,
+        preserveAspectRatio: 'xMidYMid meet',
+        class: `terrain-prop ${className}`
+      }, terrainLayer);
+    };
+    const terrainTile = (path, row, col, className, bleedTop = false) => {
+      const clipId = `terrain-clip-${row}-${col}`;
+      const clip = add('clipPath', { id: clipId }, defs);
+      const clipPoints = bleedTop
+        ? [[0, -60], [70, -55], [70, 55], [0, 54], [-70, 55], [-70, -55]].map(([x, y]) => fmtPoint(cellPoint(row, col, x, y))).join(' ')
+        : cellPolygon(row, col, radius - 2);
+      add('polygon', { points: clipPoints }, clip);
+      const p = point(row, col);
+      const tile = add('g', { 'clip-path': `url(#${clipId})` }, terrainLayer);
+      add('image', {
+        href: path,
+        x: p.x - (bleedTop ? 104 : 100),
+        y: p.y - (bleedTop ? 76 : 70),
+        width: bleedTop ? 208 : 200,
+        height: bleedTop ? 144 : 140,
+        preserveAspectRatio: 'none',
+        class: `terrain-prop ${className}`
+      }, tile);
+    };
+    const thinWallAsset = (row, col, direction) => {
+      const [start, end] = edgePoints(row, col, direction, 7);
+      const center = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+      // A pointy-top hex has three visual edge directions. Each uses its own painted
+      // perspective instead of rotating one sprite, which would turn a wall into a pillar.
+      const wallByEdgeType = [
+        { href: './assets/iso-arena/terrain/iso-thin-wall-backslash-v2.png', size: 94, rotate: -13.7 },
+    { href: './assets/iso-arena/terrain/iso-thin-wall-vertical-v4.png', size: 64, rotate: 0 },
+        { href: './assets/iso-arena/terrain/iso-thin-wall-slash-v2.png', size: 84, rotate: 10 }
+      ];
+      const wall = wallByEdgeType[direction % 3];
+      const wallGroup = add('g', { transform: `translate(${center.x} ${center.y}) rotate(${wall.rotate})` }, terrainLayer);
+      add('image', {
+        href: wall.href,
+        x: -wall.size / 2,
+        y: -wall.size / 2,
+        width: wall.size,
+        height: wall.size,
+        preserveAspectRatio: 'xMidYMid meet',
+        class: 'terrain-prop terrain-wall'
+      }, wallGroup);
+    };
+    // Visual validation layout: every strategic terrain category appears at least twice.
+    [[4, 2], [4, 3], [5, 2]].forEach(([row, col]) => terrainTile('./assets/iso-arena/terrain/iso-grass-flat-v2.png', row, col, 'terrain-grass', true));
+    [[2, 5], [5, 1]].forEach(([row, col]) => terrainObject('./assets/iso-arena/terrain/iso-boulder-flat-v2.png', row, col, 190, 190, 'terrain-boulder', -12));
+    [[1, 2], [6, 5]].forEach(([row, col]) => terrainTile('./assets/iso-arena/terrain/iso-energy-flat-v2.png', row, col, 'terrain-energy'));
+    terrainTile('./assets/iso-arena/terrain/iso-altar-flat-v2.png', 3, 3, 'terrain-altar');
+    [[2, 2, 1], [3, 4, 4], [5, 4, 5], [4, 1, 0]].forEach(([row, col, direction]) => thinWallAsset(row, col, direction));
+    for (let col = 0; col < cols; col++) { const p = point(0, col); const t = add('text', { x: p.x, y: 33, class: 'grid-label' }); t.textContent = col + 1; }
+    for (let row = 0; row < rows; row++) { const p = point(row, 0); const t = add('text', { x: p.x - 82, y: p.y + 6, class: 'grid-label row-label' }); t.textContent = String.fromCharCode(65 + row); }
+  </script>
+</body>
+</html>
